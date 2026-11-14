@@ -28,7 +28,7 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 - **LIN motion**: straight-line tool path with slerp-interpolated orientation and inverse
   kinematics at every step, continuous joint motion, stops at the first unreachable point.
 - **CSV export** of joint trajectories and tool paths, plotted with a small Python script.
-- **21 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
+- **28 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
 
 ![PTP motion profile](docs/ptp_profil.png)
 
@@ -80,7 +80,7 @@ scripts/grafice.py # plots for this README
 - [x] Forward kinematics (DH)
 - [x] Geometric Jacobian and inverse kinematics
 - [x] PTP and LIN trajectories with joint limits
-- [ ] Joint position limits and singularity detection
+- [x] Joint position limits and singularity detection (wrist, elbow, shoulder)
 - [ ] Simple collision checks (robot links as capsules)
 - [ ] Analytical inverse kinematics for the UR5 (all 8 solutions) and benchmark vs numerical
 

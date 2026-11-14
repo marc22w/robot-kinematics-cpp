@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <random>
 
 namespace kin {
@@ -17,9 +18,15 @@ Joints pasDLS(const Jacobian& J, const Vector6& e, double lambda) {
     return J.transpose() * A.ldlt().solve(e);
 }
 
-// O singura incercare, pornind din q
+Joints inLimite(const Joints& q, const JointLimits& lim) {
+    return q.cwiseMax(lim.min).cwiseMin(lim.max);
+}
+
+// O singura incercare, pornind din q; articulatiile raman mereu in limite
 IKResult incercare(const Robot& robot, const Eigen::Isometry3d& tinta, Joints q,
                    const IKOptions& opt) {
+    const JointLimits& lim = robot.limits();
+    q = inLimite(q, lim);
     double lambda = 0.01;
     Vector6 e = poseError(tinta, robot.forward(q));
     IKResult res;
@@ -33,13 +40,13 @@ IKResult incercare(const Robot& robot, const Eigen::Isometry3d& tinta, Joints q,
         const double cel_mai_mare = dq.cwiseAbs().maxCoeff();
         if (cel_mai_mare > opt.maxStep) dq *= opt.maxStep / cel_mai_mare;
 
-        const Joints q_nou = q + dq;
+        const Joints q_nou = inLimite(q + dq, lim);
         const Vector6 e_nou = poseError(tinta, robot.forward(q_nou));
-        if (e_nou.norm() < e.norm()) {   
+        if (e_nou.norm() < e.norm()) {   // pas bun: il pastram, amortizam mai putin
             q = q_nou;
             e = e_nou;
             lambda = std::max(lambda * 0.5, 1e-6);
-        } else {                         
+        } else {                         // pas prost: il respingem, amortizam mai mult
             lambda = std::min(lambda * 4.0, 1.0);
         }
     }
@@ -71,6 +78,16 @@ Vector6 poseError(const Eigen::Isometry3d& tinta, const Eigen::Isometry3d& curen
     return e;
 }
 
+SingularitatiUR singularitatiUR5(const Joints& q) {
+    const double a2 = -0.425, a3 = -0.39225, d5 = 0.09465;
+    SingularitatiUR s;
+    s.incheietura = std::abs(std::sin(q[4]));
+    s.cot = std::abs(std::sin(q[2]));
+    s.umar = std::abs(a2 * std::cos(q[1]) + a3 * std::cos(q[1] + q[2]) +
+                      d5 * std::sin(q[1] + q[2] + q[3]));
+    return s;
+}
+
 Robot::Robot(std::array<DH, kAxe> dh) : dh_(dh) {}
 
 Robot Robot::ur5() {
@@ -82,6 +99,11 @@ Robot Robot::ur5() {
         {0.0,     -kPi / 2, 0.09465},
         {0.0,      0.0,     0.0823},
     }});
+}
+
+bool Robot::inLimits(const Joints& q, double tol) const {
+    return (q.array() >= limite_.min.array() - tol).all() &&
+           (q.array() <= limite_.max.array() + tol).all();
 }
 
 Eigen::Isometry3d Robot::forward(const Joints& q) const {
@@ -113,10 +135,31 @@ Jacobian Robot::jacobian(const Joints& q) const {
     return J;
 }
 
+double Robot::manipulability(const Joints& q) const {
+    return std::abs(jacobian(q).determinant());
+}
+
+double Robot::conditionNumber(const Joints& q) const {
+    const Eigen::JacobiSVD<Jacobian> svd(jacobian(q));
+    const Vector6 s = svd.singularValues();
+    if (s(kAxe - 1) <= 0.0) return std::numeric_limits<double>::infinity();
+    return s(0) / s(kAxe - 1);
+}
+
 IKResult Robot::inverse(const Eigen::Isometry3d& tinta, const Joints& start,
                         const IKOptions& opt) const {
     std::mt19937 gen(opt.seed);
-    std::uniform_real_distribution<double> u(-kPi, kPi);
+
+    // repornirile aleatoare se fac in interiorul limitelor (si in [-pi, pi] cand se poate)
+    Joints lo, hi;
+    for (int i = 0; i < kAxe; ++i) {
+        lo[i] = std::max(limite_.min[i], -kPi);
+        hi[i] = std::min(limite_.max[i], kPi);
+        if (lo[i] > hi[i]) {
+            lo[i] = limite_.min[i];
+            hi[i] = limite_.max[i];
+        }
+    }
 
     Joints q0 = start;
     IKResult best;
@@ -126,11 +169,21 @@ IKResult Robot::inverse(const Eigen::Isometry3d& tinta, const Joints& start,
         total += res.iterations;
         if (r == 0 || res.posError + res.rotError < best.posError + best.rotError) best = res;
         if (res.converged) break;
-        for (int i = 0; i < kAxe; ++i) q0[i] = u(gen);   // pornim din alt punct
+        for (int i = 0; i < kAxe; ++i) {
+            q0[i] = std::uniform_real_distribution<double>(lo[i], hi[i])(gen);
+        }
     }
     best.iterations = total;
-    for (int i = 0; i < kAxe; ++i) {                     // unghiuri in [-pi, pi]
-        best.q[i] = std::atan2(std::sin(best.q[i]), std::cos(best.q[i]));
+
+    // unghiuri in [-pi, pi] cand limitele permit, altfel varianta echivalenta din limite
+    for (int i = 0; i < kAxe; ++i) {
+        const double w = std::atan2(std::sin(best.q[i]), std::cos(best.q[i]));
+        for (const double c : {w, w + 2.0 * kPi, w - 2.0 * kPi}) {
+            if (c >= limite_.min[i] && c <= limite_.max[i]) {
+                best.q[i] = c;
+                break;
+            }
+        }
     }
     return best;
 }

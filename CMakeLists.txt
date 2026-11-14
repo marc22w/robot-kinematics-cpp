@@ -15,6 +15,8 @@ target_compile_options(kinematics PRIVATE -Wall -Wextra -Wpedantic)
 
 # program demonstrativ
 add_executable(demo examples/main.cpp)
+add_executable(singularitati examples/singularitati.cpp)
+target_link_libraries(singularitati PRIVATE kinematics)
 target_link_libraries(demo PRIVATE kinematics)
 
 # teste (GoogleTest se descarca automat la prima configurare)
@@ -25,7 +27,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
-add_executable(tests tests/test_forward.cpp tests/test_inverse.cpp tests/test_trajectory.cpp)
+add_executable(tests tests/test_forward.cpp tests/test_inverse.cpp tests/test_trajectory.cpp tests/test_limite_singularitati.cpp)
 target_link_libraries(tests PRIVATE kinematics GTest::gtest_main)
 include(GoogleTest)
 gtest_discover_tests(tests)
