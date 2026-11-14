@@ -3,299 +3,490 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UR5 Kinematics Viewer</title>
+<title>UR5 Motion Lab</title>
+<meta name="description" content="Cinematică, planificare de traiectorii și coliziuni pentru un robot industrial UR5, calculate cu o bibliotecă C++.">
 <style>
   :root {
-    --bg: #0f1419; --panel: #1a2129; --line: rgba(255,255,255,0.08);
-    --text: #e6e9ec; --muted: #8fa3b5; --accent: #ff6b35; --steel: #4c9be8;
-    --ok: #2ca58d; --bad: #e5484d;
-    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --bg: #f2f4f8; --surface: #ffffff; --ink: #0b1220; --muted: #5d6879; --faint: #98a2b3;
+    --line: #e2e7ee; --accent: #0a62ff; --accent-soft: rgba(10, 98, 255, 0.09); --cyan: #00b8f0;
+    --ok: #00a676; --ok-soft: rgba(0, 166, 118, 0.1); --bad: #ff3355; --bad-soft: rgba(255, 51, 85, 0.1);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+    --r: 16px;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .app { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
-  .scena { position: relative; overflow: hidden;
-    background-image: linear-gradient(rgba(143,163,181,0.04) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(143,163,181,0.04) 1px, transparent 1px);
-    background-size: 24px 24px; }
-  canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
-  canvas:active { cursor: grabbing; }
-  .eticheta { position: absolute; left: 16px; top: 14px; pointer-events: none; }
-  .eticheta .mic { font: 600 11px var(--mono); letter-spacing: .16em; color: var(--muted); }
-  .eticheta h1 { margin: 2px 0 0; font-size: 22px; font-weight: 700; letter-spacing: .01em; }
-  .eticheta h1 span { color: var(--accent); }
-  .ajutor { position: absolute; left: 16px; bottom: 12px; font: 12px var(--mono); color: var(--muted);
-    pointer-events: none; }
-  .stare { position: absolute; right: 16px; top: 16px; padding: 6px 12px; border-radius: 6px;
-    font: 700 12px var(--mono); letter-spacing: .12em; border: 1px solid; }
-  .stare.liber { color: var(--ok); border-color: rgba(44,165,141,.5); background: rgba(44,165,141,.1); }
-  .stare.coliziune { color: var(--bad); border-color: rgba(229,72,77,.6); background: rgba(229,72,77,.14); }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif; }
+  body { min-height: 100vh;
+    background-image: radial-gradient(circle at 1px 1px, rgba(11, 18, 32, 0.07) 1px, transparent 0),
+                      radial-gradient(1200px 600px at 85% -10%, rgba(10, 98, 255, 0.08), transparent 60%);
+    background-size: 22px 22px, auto; }
 
-  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 18px 18px 24px;
-    overflow-y: auto; }
-  h2 { margin: 18px 0 8px; font: 600 11px var(--mono); letter-spacing: .16em; color: var(--muted);
-    text-transform: uppercase; }
-  h2:first-child { margin-top: 0; }
+  /* ---------- antet ---------- */
+  header { display: flex; align-items: center; gap: 14px; padding: 18px 28px; }
+  .logo { width: 38px; height: 38px; flex: none; }
+  .titlu .mic { font: 600 11px var(--mono); letter-spacing: 0.18em; color: var(--muted); }
+  .titlu h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+  .titlu h1 span { color: var(--accent); }
+  .dreapta { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .online { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--line); font: 600 11px var(--mono); letter-spacing: 0.12em;
+    color: var(--muted); }
+  .online i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); position: relative; }
+  .online i::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--ok);
+    opacity: 0; animation: puls 2s ease-out infinite; }
+  @keyframes puls { 0% { opacity: 0.7; transform: scale(0.6); } 100% { opacity: 0; transform: scale(1.6); } }
+  .buton-link { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px;
+    background: var(--ink); color: #fff; text-decoration: none; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .buton-link:hover { background: #1c2740; }
+
+  /* ---------- structura ---------- */
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; padding: 0 28px 28px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
+
+  /* ---------- vizor 3D ---------- */
+  .vizor { position: relative; height: calc(100vh - 106px); min-height: 520px; overflow: hidden;
+    background: radial-gradient(900px 500px at 50% 35%, #ffffff, #f4f6fa 70%); }
+  .vizor canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  .vizor canvas:active { cursor: grabbing; }
+  .colt { position: absolute; width: 18px; height: 18px; border-color: var(--accent); border-style: solid;
+    opacity: 0.55; pointer-events: none; }
+  .colt.ss { top: 12px; left: 12px; border-width: 2px 0 0 2px; border-radius: 6px 0 0 0; }
+  .colt.sd { top: 12px; right: 12px; border-width: 2px 2px 0 0; border-radius: 0 6px 0 0; }
+  .colt.js { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; border-radius: 0 0 0 6px; }
+  .colt.jd { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; border-radius: 0 0 6px 0; }
+  .hud-sus { position: absolute; left: 30px; right: 30px; top: 26px; display: flex; align-items: flex-start;
+    gap: 12px; pointer-events: none; }
+  .hud-sus .index { font: 600 11px var(--mono); letter-spacing: 0.16em; color: var(--accent); }
+  .hud-sus h2 { margin: 2px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -0.015em; }
+  .stare { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px;
+    border-radius: 999px; font: 700 12px var(--mono); letter-spacing: 0.14em; backdrop-filter: blur(6px);
+    transition: background 0.2s, color 0.2s; }
+  .stare i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .stare.liber { color: var(--ok); background: var(--ok-soft); border: 1px solid rgba(0, 166, 118, 0.3); }
+  .stare.coliziune { color: var(--bad); background: var(--bad-soft); border: 1px solid rgba(255, 51, 85, 0.35);
+    box-shadow: 0 0 0 6px rgba(255, 51, 85, 0.08); }
+
+  .redare { position: absolute; left: 24px; right: 24px; bottom: 22px; display: flex; align-items: center;
+    gap: 14px; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.82);
+    border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(10px); }
+  .play { width: 40px; height: 40px; flex: none; border: 0; border-radius: 12px; background: var(--accent);
+    color: #fff; cursor: pointer; display: grid; place-items: center; box-shadow: 0 6px 16px rgba(10, 98, 255, 0.3); }
+  .play:hover { background: #0050d6; }
+  .play svg { width: 16px; height: 16px; }
+  .cronologie { flex: 1; min-width: 0; }
+  .cronologie .timp { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted);
+    margin-bottom: 4px; }
+  .cronologie .timp b { color: var(--ink); font-weight: 600; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent) var(--p, 0%), #e3e8f0 var(--p, 0%)); outline: none; margin: 0; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--accent); box-shadow: 0 2px 6px rgba(10, 98, 255, 0.35); cursor: pointer; }
+  input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff;
+    border: 3px solid var(--accent); cursor: pointer; }
+  .viteze { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #eef1f6; flex: none; }
+  .viteze button { border: 0; background: transparent; padding: 6px 9px; border-radius: 8px; font: 600 12px var(--mono);
+    color: var(--muted); cursor: pointer; }
+  .viteze button.activ { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12); }
+  .indiciu { position: absolute; right: 30px; bottom: 94px; font: 11px var(--mono); color: var(--faint);
+    letter-spacing: 0.06em; pointer-events: none; }
+
+  /* ---------- panou ---------- */
+  aside { display: flex; flex-direction: column; gap: 16px; height: calc(100vh - 106px); min-height: 520px;
+    overflow-y: auto; padding-right: 2px; }
+  .sectiune { padding: 16px 18px; }
+  .eticheta { font: 600 11px var(--mono); letter-spacing: 0.16em; color: var(--muted); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px; }
+  .eticheta::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   .scenarii { display: grid; gap: 6px; }
-  .scenarii button { text-align: left; padding: 9px 12px; border-radius: 7px; border: 1px solid var(--line);
-    background: rgba(255,255,255,.03); color: var(--text); font: inherit; cursor: pointer; }
-  .scenarii button:hover { border-color: rgba(255,255,255,.2); }
-  .scenarii button.activ { border-color: var(--accent); background: rgba(255,107,53,.1); }
-  .descriere { color: var(--muted); margin: 10px 0 0; font-size: 13px; }
+  .scenarii button { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px;
+    text-align: left; padding: 9px 10px; border-radius: 11px; border: 1px solid transparent; background: transparent;
+    font: inherit; color: var(--ink); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+  .scenarii button:hover { background: #f5f7fb; }
+  .scenarii button.activ { background: var(--accent-soft); border-color: rgba(10, 98, 255, 0.25); }
+  .scenarii .nr { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    font: 600 11px var(--mono); background: #eef1f6; color: var(--muted); }
+  .scenarii button.activ .nr { background: var(--accent); color: #fff; }
+  .scenarii .nume { font-weight: 600; font-size: 13.5px; }
+  .tag { font: 600 10px var(--mono); letter-spacing: 0.08em; padding: 3px 7px; border-radius: 6px;
+    background: #eef1f6; color: var(--muted); }
+  .tag.rrt { background: rgba(0, 184, 240, 0.12); color: #0086b3; }
+  .descriere { margin: 12px 2px 0; color: var(--muted); font-size: 13px; }
 
-  .comenzi { display: flex; gap: 8px; align-items: center; }
-  .comenzi button { width: 40px; height: 36px; border-radius: 7px; border: 1px solid var(--line);
-    background: var(--accent); color: #111; font-size: 15px; cursor: pointer; flex: none; }
-  .comenzi select { background: var(--bg); color: var(--text); border: 1px solid var(--line);
-    border-radius: 7px; height: 36px; padding: 0 8px; font: inherit; }
-  input[type=range] { width: 100%; accent-color: var(--accent); margin: 10px 0 2px; }
-  .timp { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); }
+  .metrici { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .metrica { padding: 10px 12px; border-radius: 12px; background: #f6f8fb; border: 1px solid var(--line); }
+  .metrica span { display: block; font: 600 10px var(--mono); letter-spacing: 0.12em; color: var(--muted); }
+  .metrica b { display: block; margin-top: 2px; font: 600 19px var(--mono); letter-spacing: -0.02em; }
+  .metrica b small { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .metrica.rau b { color: var(--bad); }
+  .grafic { margin-top: 12px; height: 74px; width: 100%; display: block; }
+  .pereche { margin-top: 8px; font: 12px var(--mono); color: var(--muted); }
+  .pereche b { color: var(--ink); font-weight: 600; }
 
-  .valori { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .valoare { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 7px;
-    padding: 8px 10px; }
-  .valoare span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase;
-    letter-spacing: .08em; }
-  .valoare b { font: 600 16px var(--mono); }
-  .pereche { margin-top: 6px; font: 12px var(--mono); color: var(--muted); }
+  .axe { display: grid; gap: 9px; }
+  .axa { display: grid; grid-template-columns: 24px 1fr 62px; gap: 10px; align-items: center; font: 12px var(--mono); }
+  .axa span { color: var(--muted); font-weight: 600; }
+  .bara { position: relative; height: 6px; border-radius: 3px; background: #edf0f5; }
+  .bara::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: #cfd6e0; }
+  .bara i { position: absolute; top: 0; bottom: 0; border-radius: 3px;
+    background: linear-gradient(90deg, var(--cyan), var(--accent)); }
+  .axa em { font-style: normal; text-align: right; font-weight: 600; }
 
-  .axe { display: grid; gap: 6px; }
-  .axa { display: grid; grid-template-columns: 26px 1fr 64px; gap: 8px; align-items: center;
-    font: 12px var(--mono); }
-  .bara { position: relative; height: 8px; border-radius: 4px; background: rgba(255,255,255,.06); }
-  .bara i { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; border-radius: 2px;
-    background: var(--steel); }
-  .bara::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px;
-    background: rgba(255,255,255,.18); }
-  .axa em { font-style: normal; text-align: right; }
-  .legenda { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
-  .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px;
+  .legenda { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: var(--muted); }
+  .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px;
     vertical-align: -1px; }
-  footer { margin-top: 22px; font: 12px var(--mono); color: var(--muted); }
+  footer { padding: 4px 4px 0; font: 11px var(--mono); color: var(--faint); line-height: 1.7; }
   footer a { color: var(--accent); text-decoration: none; }
-  .eroare { padding: 24px; color: var(--muted); }
+  .eroare { position: absolute; inset: 0; display: grid; place-items: center; padding: 30px; text-align: center;
+    color: var(--muted); }
 
-  @media (max-width: 860px) {
-    .app { grid-template-columns: 1fr; grid-template-rows: 58vh auto; height: auto; }
-    aside { border-left: 0; border-top: 1px solid var(--line); padding: 16px; }
-    .eticheta h1 { font-size: 18px; }
+  @media (max-width: 960px) {
+    header { padding: 14px 16px; }
+    .online { display: none; }
+    .titlu .mic { display: none; }
+    main { grid-template-columns: 1fr; padding: 0 16px 16px; gap: 14px; }
+    .vizor { height: 62vh; min-height: 420px; }
+    aside { height: auto; overflow: visible; }
+    .hud-sus h2 { font-size: 18px; }
+    .viteze { display: none; }
+    .indiciu { display: none; }
   }
 </style>
 </head>
 <body>
-<div class="app">
-  <div class="scena">
-    <canvas id="c"></canvas>
-    <div class="eticheta"><div class="mic">BIBLIOTECĂ C++ · CINEMATICĂ</div><h1>UR5 <span>Motion</span> Viewer</h1></div>
-    <div class="stare liber" id="stare">LIBER</div>
-    <div class="ajutor">trage = rotește · scroll = zoom</div>
+<header>
+  <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+    <rect x="1" y="1" width="38" height="38" rx="11" fill="#0b1220"/>
+    <path d="M12 29 L17 18 L26 13" stroke="#fff" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+    <circle cx="12" cy="29" r="3.4" fill="#0a62ff"/><circle cx="17" cy="18" r="3" fill="#0a62ff"/>
+    <circle cx="26" cy="13" r="2.6" fill="#00b8f0"/><path d="M26 13 L30 17" stroke="#00b8f0" stroke-width="2.4" stroke-linecap="round"/>
+  </svg>
+  <div class="titlu">
+    <div class="mic">BIBLIOTECĂ C++ · CINEMATICĂ · PLANIFICARE</div>
+    <h1>UR5 <span>Motion</span> Lab</h1>
   </div>
+  <div class="dreapta">
+    <span class="online"><i></i>SIMULARE ACTIVĂ</span>
+    <a class="buton-link" href="https://github.com/marc22w/robot-kinematics-cpp" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      Cod sursă
+    </a>
+  </div>
+</header>
+
+<main>
+  <section class="card vizor" id="vizor">
+    <canvas id="c" aria-label="Robotul UR5 animat în 3D"></canvas>
+    <i class="colt ss"></i><i class="colt sd"></i><i class="colt js"></i><i class="colt jd"></i>
+    <div class="hud-sus">
+      <div><div class="index" id="index">SCENARIUL 01 / 06</div><h2 id="titluScenariu">—</h2></div>
+      <div class="stare liber" id="stare"><i></i><span>LIBER</span></div>
+    </div>
+    <div class="indiciu">TRAGE PENTRU ROTIRE · SCROLL PENTRU ZOOM</div>
+    <div class="redare">
+      <button class="play" id="play" aria-label="Pornește sau oprește"></button>
+      <div class="cronologie">
+        <div class="timp"><span>t = <b id="tCurent">0.00</b> s</span><span id="tTotal">0.00 s</span></div>
+        <input type="range" id="slider" min="0" max="1000" value="0" aria-label="Timp">
+      </div>
+      <div class="viteze" id="viteze">
+        <button data-v="0.25">0.25×</button><button data-v="0.5">0.5×</button>
+        <button data-v="1" class="activ">1×</button><button data-v="2">2×</button>
+      </div>
+    </div>
+  </section>
+
   <aside>
-    <h2>Scenarii</h2>
-    <div class="scenarii" id="scenarii"></div>
-    <p class="descriere" id="descriere"></p>
-
-    <h2>Redare</h2>
-    <div class="comenzi">
-      <button id="play" title="Pornește / oprește">❚❚</button>
-      <select id="viteza" title="Viteza redării">
-        <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
-        <option value="1" selected>1×</option><option value="2">2×</option>
-      </select>
+    <div class="card sectiune">
+      <div class="eticheta">SCENARII</div>
+      <div class="scenarii" id="scenarii"></div>
+      <p class="descriere" id="descriere"></p>
     </div>
-    <input type="range" id="slider" min="0" max="1000" value="0">
-    <div class="timp"><span id="tCurent">0.00 s</span><span id="tTotal">0.00 s</span></div>
 
-    <h2>Valori</h2>
-    <div class="valori">
-      <div class="valoare"><span>Viteza sculei</span><b id="vScula">0.000 m/s</b></div>
-      <div class="valoare"><span>Distanța minimă</span><b id="dMin">0.0 mm</b></div>
+    <div class="card sectiune">
+      <div class="eticheta">TELEMETRIE</div>
+      <div class="metrici">
+        <div class="metrica"><span>VITEZA SCULEI</span><b id="vScula">0.000<small>m/s</small></b></div>
+        <div class="metrica" id="metricaDist"><span>DISTANȚA MINIMĂ</span><b id="dMin">0.0<small>mm</small></b></div>
+      </div>
+      <canvas class="grafic" id="grafic" aria-label="Viteza sculei în timp"></canvas>
+      <div class="pereche">cele mai apropiate: <b id="pereche">—</b></div>
     </div>
-    <div class="pereche" id="pereche"></div>
 
-    <h2>Unghiuri articulații</h2>
-    <div class="axe" id="axe"></div>
-
-    <h2>Legendă</h2>
-    <div class="legenda">
-      <span><i style="background:#4c9be8"></i>robot</span>
-      <span><i style="background:#ff6b35"></i>traseul sculei</span>
-      <span><i style="background:#8a96a3"></i>obstacol</span>
-      <span><i style="background:#e5484d"></i>coliziune</span>
+    <div class="card sectiune">
+      <div class="eticheta">ARTICULAȚII</div>
+      <div class="axe" id="axe"></div>
     </div>
-    <footer>Date generate de <code>./build/export_viz</code> ·
-      <a href="https://github.com/marc22w/robot-kinematics-cpp">cod sursă pe GitHub</a></footer>
+
+    <div class="card sectiune">
+      <div class="eticheta">LEGENDĂ</div>
+      <div class="legenda">
+        <span><i style="background:#dfe5ec;border:1px solid #8792a0"></i>robot</span>
+        <span><i style="background:#0a62ff"></i>traseul sculei</span>
+        <span><i style="background:#2b3340"></i>obstacol</span>
+        <span><i style="background:#ff3355"></i>coliziune</span>
+        <span><i style="background:#00b8f0;transform:rotate(45deg) scale(.8)"></i>punct de trecere</span>
+      </div>
+    </div>
+    <footer>Date calculate de biblioteca C++ (<code>./build/export_viz</code>):
+      cinematică directă și inversă, traiectorii PTP/LIN, coliziuni cu capsule, planificare RRT-Connect.
+      · <a href="https://github.com/marc22w/robot-kinematics-cpp" target="_blank" rel="noopener">GitHub</a></footer>
   </aside>
-</div>
+</main>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
 const canvas = $("c"), ctx = canvas.getContext("2d");
-let date = null, sc = null, timp = 0, ruleaza = true, vitezaRedare = 1, ultimCadru = null;
-const cam = { yaw: -2.2, pitch: 0.42, dist: 1.55, tinta: [-0.2, -0.2, 0.28] };
-const CULOARE_LINK = ["#3d566e", "#4c9be8", "#5aa8f0", "#6cb4f2", "#7fc0f4", "#93cbf6"];
+const grafic = $("grafic"), gctx = grafic.getContext("2d");
+let date = null, sc = null, indexSc = 0, timp = 0, ruleaza = true, vitezaRedare = 1, ultimCadru = null;
+const cam = { yaw: -2.25, pitch: 0.42, dist: 1.7, tinta: [-0.15, -0.12, 0.27] };
+const ICON_PAUZA = '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>';
+const ICON_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11a.8.8 0 0 0 1.2.7l9-5.5a.8.8 0 0 0 0-1.4l-9-5.5A.8.8 0 0 0 4 2.5z"/></svg>';
 
-// ---------- proiectie 3D (z in sus) ----------
-function baza() {
-  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
-  const ochi = [cam.tinta[0] + cam.dist * cp * cy, cam.tinta[1] + cam.dist * cp * sy, cam.tinta[2] + cam.dist * sp];
-  const f = norm(sub(cam.tinta, ochi));
-  const r = norm(cross(f, [0, 0, 1]));
-  const u = cross(r, f);
-  return { ochi, f, r, u };
-}
-function proiecteaza(p, B, W, H) {
-  const d = sub(p, B.ochi);
-  const z = dot(d, B.f);
-  const s = (Math.min(W, H) * 0.9) / Math.max(z, 0.05);
-  return { x: W / 2 + dot(d, B.r) * s, y: H / 2 - dot(d, B.u) * s, z, s };
-}
+// ---------- algebra si proiectie (z in sus) ----------
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+function bazaCamera() {
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const ochi = [cam.tinta[0] + cam.dist * cp * Math.cos(cam.yaw), cam.tinta[1] + cam.dist * cp * Math.sin(cam.yaw),
+                cam.tinta[2] + cam.dist * sp];
+  const f = norm(sub(cam.tinta, ochi)), r = norm(cross(f, [0, 0, 1]));
+  return { ochi, f, r, u: cross(r, f) };
+}
+function proiector(W, H) {
+  const B = bazaCamera(), k = Math.min(W, H) * 0.95;
+  return (p) => {
+    const d = sub(p, B.ochi), z = Math.max(dot(d, B.f), 0.05), s = k / z;
+    return { x: W / 2 + dot(d, B.r) * s, y: H * 0.47 - dot(d, B.u) * s, z, s };
+  };
+}
 
 // ---------- esantionare dupa timp ----------
-function cauta(t) {   // indexul k cu t[k] <= t < t[k+1] si fractia dintre ele
-  const T = sc.t;
+function cauta(t) {
+  const T = sc.t, n = T.length;
   if (t <= T[0]) return [0, 0];
-  if (t >= T[T.length - 1]) return [T.length - 2, 1];
-  let lo = 0, hi = T.length - 1;
+  if (t >= T[n - 1]) return [n - 2, 1];
+  let lo = 0, hi = n - 1;
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= t) lo = m; else hi = m; }
   return [lo, (t - T[lo]) / (T[hi] - T[lo])];
 }
 
-// ---------- desen ----------
+// ---------- scena 3D ----------
+function linie(c, a, b) { c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke(); }
 function deseneaza() {
   const W = canvas.clientWidth, H = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
-  if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
   if (!sc) return;
-  const B = baza(), P = (p) => proiecteaza(p, B, W, H);
+  const P = proiector(W, H);
 
-  // masa: grila 1.6 x 1.6 m in jurul bazei
-  ctx.lineWidth = 1;
-  for (let i = -8; i <= 8; i++) {
-    const v = i * 0.1;
-    ctx.strokeStyle = i === 0 ? "rgba(143,163,181,0.35)" : "rgba(143,163,181,0.13)";
-    linie(P([v, -0.8, 0]), P([v, 0.8, 0]));
-    linie(P([-0.8, v, 0]), P([0.8, v, 0]));
+  // podeaua: grila fina, cu axele bazei
+  ctx.lineCap = "butt";
+  for (let i = -10; i <= 10; i++) {
+    const v = i * 0.1, f = 1 - Math.abs(i) / 11;
+    ctx.lineWidth = i % 5 === 0 ? 1.2 : 0.8;
+    ctx.strokeStyle = `rgba(80, 100, 130, ${(i % 5 === 0 ? 0.22 : 0.11) * f})`;
+    linie(ctx, P([v, -1, 0]), P([v, 1, 0]));
+    linie(ctx, P([-1, v, 0]), P([1, v, 0]));
   }
-  // axele bazei
   const o = P([0, 0, 0]);
-  [[0.15, 0, 0, "#e5484d", "x"], [0, 0.15, 0, "#2ca58d", "y"], [0, 0, 0.15, "#4c9be8", "z"]].forEach(([x, y, z, c, n]) => {
-    const e = P([x, y, z]); ctx.strokeStyle = c; ctx.lineWidth = 2; linie(o, e);
-    ctx.fillStyle = c; ctx.font = "12px ui-monospace, monospace"; ctx.fillText(n, e.x + 4, e.y - 4);
+  [[0.18, 0, 0, "#ff3355"], [0, 0.18, 0, "#00a676"], [0, 0, 0.18, "#0a62ff"]].forEach(([x, y, z, c]) => {
+    ctx.strokeStyle = c; ctx.lineWidth = 2; linie(ctx, o, P([x, y, z]));
   });
 
   const [k, f] = cauta(timp);
   const puncte = sc.puncte[k].map((p, i) => lerp(p, sc.puncte[k + 1][i], f));
-  const coliziune = (f < 0.5 ? sc.dist[k] : sc.dist[k + 1]) < 0;
+  const j = f < 0.5 ? k : k + 1;
+  const coliziune = sc.dist[j] < 0;
 
-  // traseul sculei: tot (estompat) + parcurs (plin)
-  const tool = sc.puncte.map((pp) => P(pp[6]));
-  ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,107,53,0.25)"; polilinie(tool);
-  ctx.strokeStyle = "#ff6b35"; polilinie(tool.slice(0, k + 1).concat([P(puncte[6])]));
-
-  // corpuri de desenat, sortate dupa adancime (cele departate intai)
-  const corpuri = [];
-  sc.obstacole.forEach((ob) => corpuri.push({ a: ob.a, b: ob.b, r: ob.r, culoare: "#8a96a3", contur: "#5d6875" }));
-  for (let i = 0; i < 6; i++) {
-    corpuri.push({ a: puncte[i], b: puncte[i + 1], r: date.raze[i],
-      culoare: coliziune ? "#e5484d" : CULOARE_LINK[i], contur: coliziune ? "#8f1d21" : "#1f3347" });
-  }
-  corpuri.forEach((c) => { c.A = P(c.a); c.B = P(c.b); c.z = (c.A.z + c.B.z) / 2; });
-  corpuri.sort((m, n) => n.z - m.z);
+  // umbre pe podea
   ctx.lineCap = "round";
-  corpuri.forEach((c) => {
-    const w = 2 * c.r * (c.A.s + c.B.s) / 2;
-    ctx.strokeStyle = c.contur; ctx.lineWidth = w + 3; linie(c.A, c.B);
-    ctx.strokeStyle = c.culoare; ctx.lineWidth = w; linie(c.A, c.B);
-    ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = Math.max(1, w * 0.25);
-    linie({ x: c.A.x - w * 0.18, y: c.A.y - w * 0.18 }, { x: c.B.x - w * 0.18, y: c.B.y - w * 0.18 });
-  });
-  // articulatii
-  puncte.forEach((p) => { const q = P(p); ctx.fillStyle = "#0f1419";
-    ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(2, 0.012 * q.s), 0, 7); ctx.fill(); });
-  // flansa
-  const fl = P(puncte[6]); ctx.fillStyle = "#ff6b35";
-  ctx.beginPath(); ctx.arc(fl.x, fl.y, Math.max(3, 0.018 * fl.s), 0, 7); ctx.fill();
+  const umbra = (a, b, r) => { const A = P([a[0], a[1], 0]), B = P([b[0], b[1], 0]);
+    ctx.lineWidth = 2 * r * (A.s + B.s) / 2; linie(ctx, A, B); };
+  ctx.strokeStyle = "rgba(20, 30, 50, 0.07)";
+  sc.obstacole.forEach((ob) => umbra(ob.a, ob.b, ob.r * 1.6));
+  for (let i = 0; i < 6; i++) umbra(puncte[i], puncte[i + 1], date.raze[i] * 1.3);
 
-  actualizeazaPanou(k, f, coliziune);
+  // traseul sculei
+  const tool = sc.puncte.map((pp) => P(pp[6]));
+  ctx.lineWidth = 2; ctx.strokeStyle = "rgba(10, 98, 255, 0.18)"; ctx.setLineDash([4, 5]);
+  ctx.beginPath(); tool.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+  ctx.setLineDash([]);
+  const parcurs = tool.slice(0, k + 1).concat([P(puncte[6])]);
+  ctx.save(); ctx.shadowColor = "rgba(10, 98, 255, 0.45)"; ctx.shadowBlur = 8;
+  const gr = ctx.createLinearGradient(parcurs[0].x, parcurs[0].y, parcurs[parcurs.length - 1].x, parcurs[parcurs.length - 1].y);
+  gr.addColorStop(0, "#00b8f0"); gr.addColorStop(1, "#0a62ff");
+  ctx.strokeStyle = gr; ctx.lineWidth = 3;
+  ctx.beginPath(); parcurs.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+  ctx.restore();
+
+  // corpuri sortate dupa adancime
+  const corpuri = [];
+  sc.obstacole.forEach((ob) => corpuri.push({ tip: "obstacol", a: ob.a, b: ob.b, r: ob.r }));
+  for (let i = 0; i < 6; i++) corpuri.push({ tip: "link", i, a: puncte[i], b: puncte[i + 1], r: date.raze[i] });
+  for (let i = 1; i < 6; i++) corpuri.push({ tip: "articulatie", a: puncte[i], r: date.raze[Math.min(i, 5)] });
+  corpuri.forEach((c) => { c.A = P(c.a); c.B = c.b ? P(c.b) : c.A; c.z = (c.A.z + c.B.z) / 2 + (c.tip === "articulatie" ? -0.02 : 0); });
+  corpuri.sort((m, n) => n.z - m.z);
+
+  for (const c of corpuri) {
+    const w = 2 * c.r * (c.A.s + c.B.s) / 2;
+    if (c.tip === "articulatie") {
+      ctx.fillStyle = coliziune ? "#ff3355" : "#0a62ff";
+      ctx.beginPath(); ctx.arc(c.A.x, c.A.y, w * 0.56, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath(); ctx.arc(c.A.x, c.A.y, w * 0.26, 0, 7); ctx.fill();
+      continue;
+    }
+    const obst = c.tip === "obstacol";
+    const corp = obst ? "#2b3340" : coliziune ? "#ff5c77" : (c.i === 0 ? "#cfd7e1" : "#e7ecf2");
+    const contur = obst ? "#141a23" : coliziune ? "#c4123a" : "#8a96a5";
+    if (coliziune && !obst) { ctx.save(); ctx.shadowColor = "rgba(255,51,85,0.55)"; ctx.shadowBlur = 14; }
+    ctx.strokeStyle = contur; ctx.lineWidth = w + 2.5; linie(ctx, c.A, c.B);
+    if (coliziune && !obst) ctx.restore();
+    ctx.strokeStyle = corp; ctx.lineWidth = w; linie(ctx, c.A, c.B);
+    const off = w * 0.2;
+    ctx.strokeStyle = obst ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.85)";
+    ctx.lineWidth = Math.max(1, w * 0.22);
+    linie(ctx, { x: c.A.x - off, y: c.A.y - off }, { x: c.B.x - off, y: c.B.y - off });
+  }
+
+  // flansa si punctele de trecere
+  const fl = P(puncte[6]);
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = "#00b8f0"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(fl.x, fl.y, Math.max(4, 0.016 * fl.s), 0, 7); ctx.fill(); ctx.stroke();
+  (sc.repere || []).forEach((p, i) => {
+    const q = P(p), s = 7;
+    ctx.fillStyle = "#00b8f0"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(q.x, q.y - s); ctx.lineTo(q.x + s, q.y); ctx.lineTo(q.x, q.y + s); ctx.lineTo(q.x - s, q.y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#0b1220"; ctx.font = "600 11px ui-monospace, Menlo, monospace";
+    ctx.fillText(i === 0 ? "START" : i === sc.repere.length - 1 ? "ȚINTĂ" : "P" + i, q.x + 10, q.y - 8);
+  });
+
+  actualizeazaPanou(k, f, j, coliziune);
 }
-function linie(a, b) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
-function polilinie(pts) { if (pts.length < 2) return; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke(); }
 
 // ---------- panou ----------
-function actualizeazaPanou(k, f, coliziune) {
+function setSlider(v) { const s = $("slider"); s.value = v; s.style.setProperty("--p", v / 10 + "%"); }
+function actualizeazaPanou(k, f, j, coliziune) {
   const T = sc.t[sc.t.length - 1];
-  $("tCurent").textContent = timp.toFixed(2) + " s";
+  $("tCurent").textContent = timp.toFixed(2);
   $("tTotal").textContent = T.toFixed(2) + " s";
-  if (document.activeElement !== $("slider")) $("slider").value = Math.round((timp / T) * 1000);
+  if (document.activeElement !== $("slider")) setSlider(Math.round(Math.min(timp / T, 1) * 1000));
   const v = sc.viteza[k] + (sc.viteza[k + 1] - sc.viteza[k]) * f;
-  $("vScula").textContent = v.toFixed(3) + " m/s";
-  const j = f < 0.5 ? k : k + 1;
-  $("dMin").textContent = (sc.dist[j] * 1000).toFixed(1) + " mm";
-  $("pereche").textContent = "cele mai apropiate: " + sc.pereche[j];
-  const st = $("stare"); st.textContent = coliziune ? "COLIZIUNE" : "LIBER";
+  $("vScula").innerHTML = v.toFixed(3) + "<small>m/s</small>";
+  $("dMin").innerHTML = (sc.dist[j] * 1000).toFixed(1) + "<small>mm</small>";
+  $("metricaDist").classList.toggle("rau", coliziune);
+  $("pereche").textContent = sc.pereche[j];
+  const st = $("stare");
   st.className = "stare " + (coliziune ? "coliziune" : "liber");
-  const q = sc.q[k].map((a, i) => a + (sc.q[k + 1][i] - a) * f);
-  q.forEach((a, i) => {
-    $("bara" + i).style.left = (50 + (a / 360) * 50) + "%";
-    $("val" + i).textContent = a.toFixed(1) + "°";
+  st.querySelector("span").textContent = coliziune ? "COLIZIUNE" : "LIBER";
+  sc.q[k].forEach((a, i) => {
+    const q = a + (sc.q[k + 1][i] - a) * f, x = Math.max(-360, Math.min(360, q)) / 720 * 100;
+    const bara = $("bara" + i);
+    bara.style.left = (x < 0 ? 50 + x : 50) + "%"; bara.style.width = Math.abs(x) + "%";
+    $("val" + i).textContent = q.toFixed(1) + "°";
   });
+  deseneazaGrafic(k + f);
+}
+function deseneazaGrafic(pozitie) {
+  const W = grafic.clientWidth, H = grafic.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (grafic.width !== Math.round(W * dpr)) { grafic.width = Math.round(W * dpr); grafic.height = Math.round(H * dpr); }
+  gctx.setTransform(dpr, 0, 0, dpr, 0, 0); gctx.clearRect(0, 0, W, H);
+  const v = sc.viteza, t = sc.t, T = t[t.length - 1], vm = Math.max(...v, 1e-6) * 1.15;
+  const X = (x) => (x / T) * W, Y = (y) => H - 14 - (y / vm) * (H - 20);
+  // zonele de coliziune
+  gctx.fillStyle = "rgba(255,51,85,0.1)";
+  for (let i = 0; i < t.length - 1; i++) if (sc.dist[i] < 0) gctx.fillRect(X(t[i]), 0, X(t[i + 1]) - X(t[i]) + 0.5, H - 14);
+  const g = gctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "rgba(10,98,255,0.22)"); g.addColorStop(1, "rgba(10,98,255,0)");
+  gctx.beginPath(); gctx.moveTo(X(0), Y(0)); t.forEach((x, i) => gctx.lineTo(X(x), Y(v[i]))); gctx.lineTo(X(T), Y(0));
+  gctx.closePath(); gctx.fillStyle = g; gctx.fill();
+  gctx.beginPath(); t.forEach((x, i) => i ? gctx.lineTo(X(x), Y(v[i])) : gctx.moveTo(X(x), Y(v[i])));
+  gctx.strokeStyle = "#0a62ff"; gctx.lineWidth = 1.8; gctx.stroke();
+  const x = X(timp);
+  gctx.strokeStyle = "rgba(11,18,32,0.35)"; gctx.lineWidth = 1; gctx.beginPath(); gctx.moveTo(x, 0); gctx.lineTo(x, H - 14); gctx.stroke();
+  gctx.fillStyle = "#98a2b3"; gctx.font = "10px ui-monospace, Menlo, monospace";
+  gctx.fillText("viteza sculei în timp", 0, H - 2);
+  gctx.textAlign = "right"; gctx.fillText("max " + Math.max(...v).toFixed(2) + " m/s", W, H - 2); gctx.textAlign = "left";
+}
+function eticheta(nume) {
+  if (/RRT/i.test(nume)) return ["RRT", "rrt"];
+  if (/PTP/.test(nume)) return ["PTP", ""];
+  return ["LIN", ""];
 }
 function construiestePanou() {
   $("axe").innerHTML = [0, 1, 2, 3, 4, 5].map((i) =>
-    `<div class="axa"><span>A${i + 1}</span><div class="bara"><i id="bara${i}"></i></div><em id="val${i}"></em></div>`).join("");
-  $("scenarii").innerHTML = date.scenarii.map((s, i) => `<button data-i="${i}">${s.nume}</button>`).join("");
+    `<div class="axa"><span>A${i + 1}</span><div class="bara"><i id="bara${i}"></i></div><em id="val${i}">0.0°</em></div>`).join("");
+  $("scenarii").innerHTML = date.scenarii.map((s, i) => {
+    const [t, c] = eticheta(s.nume);
+    return `<button data-i="${i}"><span class="nr">${String(i + 1).padStart(2, "0")}</span>` +
+           `<span class="nume">${s.nume}</span><span class="tag ${c}">${t}</span></button>`;
+  }).join("");
   $("scenarii").querySelectorAll("button").forEach((b) => b.onclick = () => alege(+b.dataset.i));
 }
 function alege(i) {
-  sc = date.scenarii[i]; timp = 0; ruleaza = true; $("play").textContent = "❚❚";
+  indexSc = i; sc = date.scenarii[i]; timp = 0; seteazaRedare(true);
   $("descriere").textContent = sc.descriere;
+  $("titluScenariu").textContent = sc.nume;
+  $("index").textContent = `SCENARIUL ${String(i + 1).padStart(2, "0")} / ${String(date.scenarii.length).padStart(2, "0")}`;
   $("scenarii").querySelectorAll("button").forEach((b) => b.classList.toggle("activ", +b.dataset.i === i));
 }
+function seteazaRedare(r) { ruleaza = r; $("play").innerHTML = r ? ICON_PAUZA : ICON_PLAY; }
 
 // ---------- animatie si interactiune ----------
 function cadru(acum) {
   if (ultimCadru !== null && ruleaza && sc) {
     timp += ((acum - ultimCadru) / 1000) * vitezaRedare;
-    const T = sc.t[sc.t.length - 1];
-    if (timp > T + 0.8) timp = 0;   // scurta pauza la final, apoi reia
+    if (timp > sc.t[sc.t.length - 1] + 1.0) timp = 0;
   }
   ultimCadru = acum;
   deseneaza();
   requestAnimationFrame(cadru);
 }
-$("play").onclick = () => { ruleaza = !ruleaza; $("play").textContent = ruleaza ? "❚❚" : "▶"; };
-$("viteza").onchange = (e) => vitezaRedare = +e.target.value;
-$("slider").oninput = (e) => { if (!sc) return; timp = (e.target.value / 1000) * sc.t[sc.t.length - 1];
-  ruleaza = false; $("play").textContent = "▶"; };
-
+$("play").onclick = () => seteazaRedare(!ruleaza);
+$("viteze").querySelectorAll("button").forEach((b) => b.onclick = () => {
+  vitezaRedare = +b.dataset.v;
+  $("viteze").querySelectorAll("button").forEach((x) => x.classList.toggle("activ", x === b));
+});
+$("slider").oninput = (e) => {
+  if (!sc) return;
+  setSlider(+e.target.value);
+  timp = (e.target.value / 1000) * sc.t[sc.t.length - 1];
+  seteazaRedare(false);
+};
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && e.target === document.body) { e.preventDefault(); seteazaRedare(!ruleaza); }
+});
 let trage = null;
 canvas.addEventListener("pointerdown", (e) => { trage = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener("pointermove", (e) => {
   if (!trage) return;
   cam.yaw -= (e.clientX - trage[0]) * 0.008;
-  cam.pitch = Math.min(1.45, Math.max(0.05, cam.pitch + (e.clientY - trage[1]) * 0.006));
+  cam.pitch = Math.min(1.4, Math.max(0.06, cam.pitch + (e.clientY - trage[1]) * 0.006));
   trage = [e.clientX, e.clientY];
 });
 canvas.addEventListener("pointerup", () => trage = null);
-canvas.addEventListener("wheel", (e) => { e.preventDefault();
-  cam.dist = Math.min(5, Math.max(0.8, cam.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault(); cam.dist = Math.min(5, Math.max(0.8, cam.dist * Math.exp(e.deltaY * 0.001)));
+}, { passive: false });
 
 fetch("scenarii.json")
-  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
   .then((d) => { date = d; construiestePanou(); alege(0); requestAnimationFrame(cadru); })
-  .catch((e) => { console.error(e); document.querySelector(".scena").innerHTML =
-    '<div class="eroare">Nu am putut încărca <code>scenarii.json</code>. Pagina trebuie deschisă printr-un server ' +
-    '(de exemplu GitHub Pages sau <code>python3 -m http.server</code>), nu direct din fișier.</div>'; });
+  .catch((e) => {
+    console.error(e);
+    $("vizor").insertAdjacentHTML("beforeend",
+      '<div class="eroare">Nu am putut încărca <code>scenarii.json</code>.<br>Pagina trebuie deschisă printr-un server ' +
+      '(GitHub Pages sau <code>python3 -m http.server</code>), nu direct din fișier.</div>');
+  });
 </script>
 </body>
 </html>

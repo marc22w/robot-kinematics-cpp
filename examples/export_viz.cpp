@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "kinematics/collision.hpp"
+#include "kinematics/planner.hpp"
 #include "kinematics/robot.hpp"
 #include "kinematics/trajectory.hpp"
 
@@ -19,6 +20,7 @@ struct Scenariu {
     std::string descriere;
     kin::Trajectory traj;
     kin::Scena scena;
+    std::vector<kin::Joints> repere = {};   // puncte de trecere (planificator), afisate in pagina
 };
 
 kin::Joints grade(double a1, double a2, double a3, double a4, double a5, double a6) {
@@ -90,6 +92,11 @@ void scrieScenariu(std::ostream& o, const kin::Robot& robot, const Scenariu& s) 
         vec(o, ob.forma.b);
         o << ",\"r\":" << ob.forma.raza << "}";
     }
+    o << "],\"repere\":[";
+    for (size_t i = 0; i < s.repere.size(); ++i) {
+        if (i) o << ",";
+        vec(o, robot.forward(s.repere[i]).translation());
+    }
     o << "]}";
 }
 
@@ -144,6 +151,28 @@ int main(int argc, char** argv) {
     scenarii.push_back({"Coborâre spre masă",
                         "LIN vertical până la 30 mm de masă: flanșa (rază 45 mm) intră în coliziune cu masa.",
                         kin::linearCartesian(robot, acasa, jos, 2.0, 0.02).traj, masa});
+
+    // 5-6. rotire pe A1 cu un stalp in drum: PTP direct vs drum planificat cu RRT-Connect
+    const kin::Joints qs = grade(-60, -90, 100, -100, -90, 0);
+    const kin::Joints qt = grade(60, -90, 100, -100, -90, 0);
+    const Eigen::Vector3d pm = robot.forward(grade(0, -90, 100, -100, -90, 0)).translation();
+    kin::Scena scenaRRT = masa;
+    scenaRRT.obstacole.push_back(
+        {"stalp", {Eigen::Vector3d(pm.x(), pm.y(), 0.0), Eigen::Vector3d(pm.x(), pm.y(), 0.55), 0.04}});
+    const kin::Joints vmax = kin::Joints::Constant(180.0 * kGrad);
+    const kin::Joints amax = kin::Joints::Constant(4.0);
+    scenarii.push_back({"PTP direct prin obstacol",
+                        "Rotire pe A1 de la −60° la +60°, cu un stâlp de Ø80 mm exact în drum. Mișcarea directă "
+                        "îl lovește.",
+                        kin::quinticJoint(qs, qt, kin::durataMinima(qs, qt, vmax, amax), 0.02), scenaRRT});
+    const kin::RezultatRRT rrt = kin::planificaRRT(robot, qs, qt, scenaRRT);
+    if (rrt.gasit) {
+        scenarii.push_back({"Ocolire cu RRT-Connect",
+                            "Aceeași mișcare, planificată automat: doi arbori de poziții sigure cresc din start și "
+                            "din țintă până se întâlnesc, apoi drumul e scurtat. Romburile marchează punctele de "
+                            "trecere.",
+                            kin::traiectorieDinCale(rrt.cale, vmax, amax, 0.02), scenaRRT, rrt.cale});
+    }
 
     if (fisier.has_parent_path()) std::filesystem::create_directories(fisier.parent_path());
     std::ofstream o(fisier);

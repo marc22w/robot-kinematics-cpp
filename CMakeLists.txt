@@ -16,13 +16,14 @@ add_library(kinematics
   src/trajectory.cpp
   src/ur_analytic.cpp
   src/collision.cpp
+  src/planner.cpp
 )
 target_include_directories(kinematics PUBLIC include)
 target_link_libraries(kinematics PUBLIC Eigen3::Eigen)
 target_compile_options(kinematics PRIVATE -Wall -Wextra -Wpedantic)
 
 # programe demonstrative
-foreach(exemplu demo singularitati benchmark coliziuni export_viz)
+foreach(exemplu demo singularitati benchmark coliziuni export_viz planificare)
   set(sursa ${exemplu})
   if(exemplu STREQUAL "demo")
     set(sursa main)
@@ -46,6 +47,7 @@ add_executable(tests
   tests/test_limite_singularitati.cpp
   tests/test_analitic.cpp
   tests/test_coliziuni.cpp
+  tests/test_planner.cpp
 )
 target_link_libraries(tests PRIVATE kinematics GTest::gtest_main)
 include(GoogleTest)
