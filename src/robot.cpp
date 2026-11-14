@@ -35,11 +35,11 @@ IKResult incercare(const Robot& robot, const Eigen::Isometry3d& tinta, Joints q,
 
         const Joints q_nou = q + dq;
         const Vector6 e_nou = poseError(tinta, robot.forward(q_nou));
-        if (e_nou.norm() < e.norm()) {   // pas bun: il pastram, amortizam mai putin
+        if (e_nou.norm() < e.norm()) {   
             q = q_nou;
             e = e_nou;
             lambda = std::max(lambda * 0.5, 1e-6);
-        } else {                         // pas prost: il respingem, amortizam mai mult
+        } else {                         
             lambda = std::min(lambda * 4.0, 1.0);
         }
     }
