@@ -8,12 +8,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Eigen3 REQUIRED NO_MODULE)
 
 # biblioteca de cinematica
-add_library(kinematics src/robot.cpp src/trajectory.cpp)
+add_library(kinematics src/robot.cpp src/trajectory.cpp src/ur_analytic.cpp)
 target_include_directories(kinematics PUBLIC include)
 target_link_libraries(kinematics PUBLIC Eigen3::Eigen)
 target_compile_options(kinematics PRIVATE -Wall -Wextra -Wpedantic)
 
 # program demonstrativ
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+add_executable(benchmark examples/benchmark.cpp)
+target_link_libraries(benchmark PRIVATE kinematics)
 add_executable(demo examples/main.cpp)
 add_executable(singularitati examples/singularitati.cpp)
 target_link_libraries(singularitati PRIVATE kinematics)
@@ -27,7 +32,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
-add_executable(tests tests/test_forward.cpp tests/test_inverse.cpp tests/test_trajectory.cpp tests/test_limite_singularitati.cpp)
+add_executable(tests tests/test_forward.cpp tests/test_inverse.cpp tests/test_trajectory.cpp tests/test_limite_singularitati.cpp tests/test_analitic.cpp)
 target_link_libraries(tests PRIVATE kinematics GTest::gtest_main)
 include(GoogleTest)
 gtest_discover_tests(tests)
