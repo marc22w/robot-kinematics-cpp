@@ -2,6 +2,8 @@
 
 ![tests](https://github.com/marc22w/robot-kinematics-cpp/actions/workflows/tests.yml/badge.svg)
 
+**Live 3D demo:** https://marc22w.github.io/robot-kinematics-cpp/viz/
+
 A C++17 library for the kinematics and motion planning of 6-axis industrial robots,
 demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg parameters).
 
@@ -47,6 +49,8 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 - **Velocity-limited LIN**: trapezoidal tool-speed profile with look-ahead (forward/backward
   pass, as on CNC controllers); the tool slows down automatically wherever a joint would
   exceed its velocity limit, e.g. near singularities.
+- **3D web viewer** (no dependencies, own canvas renderer): animated robot, tool path,
+  obstacles and live collision status; data exported from the C++ library to JSON.
 - **CSV export** of joint trajectories and tool paths, plotted with a small Python script.
 - **48 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
 
