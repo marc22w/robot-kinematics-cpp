@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UR5 Kinematics Viewer</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2129; --line: rgba(255,255,255,0.08);
+    --text: #e6e9ec; --muted: #8fa3b5; --accent: #ff6b35; --steel: #4c9be8;
+    --ok: #2ca58d; --bad: #e5484d;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .app { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+  .scena { position: relative; overflow: hidden;
+    background-image: linear-gradient(rgba(143,163,181,0.04) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(143,163,181,0.04) 1px, transparent 1px);
+    background-size: 24px 24px; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  canvas:active { cursor: grabbing; }
+  .eticheta { position: absolute; left: 16px; top: 14px; pointer-events: none; }
+  .eticheta .mic { font: 600 11px var(--mono); letter-spacing: .16em; color: var(--muted); }
+  .eticheta h1 { margin: 2px 0 0; font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+  .eticheta h1 span { color: var(--accent); }
+  .ajutor { position: absolute; left: 16px; bottom: 12px; font: 12px var(--mono); color: var(--muted);
+    pointer-events: none; }
+  .stare { position: absolute; right: 16px; top: 16px; padding: 6px 12px; border-radius: 6px;
+    font: 700 12px var(--mono); letter-spacing: .12em; border: 1px solid; }
+  .stare.liber { color: var(--ok); border-color: rgba(44,165,141,.5); background: rgba(44,165,141,.1); }
+  .stare.coliziune { color: var(--bad); border-color: rgba(229,72,77,.6); background: rgba(229,72,77,.14); }
+
+  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 18px 18px 24px;
+    overflow-y: auto; }
+  h2 { margin: 18px 0 8px; font: 600 11px var(--mono); letter-spacing: .16em; color: var(--muted);
+    text-transform: uppercase; }
+  h2:first-child { margin-top: 0; }
+  .scenarii { display: grid; gap: 6px; }
+  .scenarii button { text-align: left; padding: 9px 12px; border-radius: 7px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.03); color: var(--text); font: inherit; cursor: pointer; }
+  .scenarii button:hover { border-color: rgba(255,255,255,.2); }
+  .scenarii button.activ { border-color: var(--accent); background: rgba(255,107,53,.1); }
+  .descriere { color: var(--muted); margin: 10px 0 0; font-size: 13px; }
+
+  .comenzi { display: flex; gap: 8px; align-items: center; }
+  .comenzi button { width: 40px; height: 36px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--accent); color: #111; font-size: 15px; cursor: pointer; flex: none; }
+  .comenzi select { background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; height: 36px; padding: 0 8px; font: inherit; }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 10px 0 2px; }
+  .timp { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); }
+
+  .valori { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .valoare { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 7px;
+    padding: 8px 10px; }
+  .valoare span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .08em; }
+  .valoare b { font: 600 16px var(--mono); }
+  .pereche { margin-top: 6px; font: 12px var(--mono); color: var(--muted); }
+
+  .axe { display: grid; gap: 6px; }
+  .axa { display: grid; grid-template-columns: 26px 1fr 64px; gap: 8px; align-items: center;
+    font: 12px var(--mono); }
+  .bara { position: relative; height: 8px; border-radius: 4px; background: rgba(255,255,255,.06); }
+  .bara i { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; border-radius: 2px;
+    background: var(--steel); }
+  .bara::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px;
+    background: rgba(255,255,255,.18); }
+  .axa em { font-style: normal; text-align: right; }
+  .legenda { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
+  .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px;
+    vertical-align: -1px; }
+  footer { margin-top: 22px; font: 12px var(--mono); color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  .eroare { padding: 24px; color: var(--muted); }
+
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 58vh auto; height: auto; }
+    aside { border-left: 0; border-top: 1px solid var(--line); padding: 16px; }
+    .eticheta h1 { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="scena">
+    <canvas id="c"></canvas>
+    <div class="eticheta"><div class="mic">BIBLIOTECĂ C++ · CINEMATICĂ</div><h1>UR5 <span>Motion</span> Viewer</h1></div>
+    <div class="stare liber" id="stare">LIBER</div>
+    <div class="ajutor">trage = rotește · scroll = zoom</div>
+  </div>
+  <aside>
+    <h2>Scenarii</h2>
+    <div class="scenarii" id="scenarii"></div>
+    <p class="descriere" id="descriere"></p>
+
+    <h2>Redare</h2>
+    <div class="comenzi">
+      <button id="play" title="Pornește / oprește">❚❚</button>
+      <select id="viteza" title="Viteza redării">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option><option value="2">2×</option>
+      </select>
+    </div>
+    <input type="range" id="slider" min="0" max="1000" value="0">
+    <div class="timp"><span id="tCurent">0.00 s</span><span id="tTotal">0.00 s</span></div>
+
+    <h2>Valori</h2>
+    <div class="valori">
+      <div class="valoare"><span>Viteza sculei</span><b id="vScula">0.000 m/s</b></div>
+      <div class="valoare"><span>Distanța minimă</span><b id="dMin">0.0 mm</b></div>
+    </div>
+    <div class="pereche" id="pereche"></div>
+
+    <h2>Unghiuri articulații</h2>
+    <div class="axe" id="axe"></div>
+
+    <h2>Legendă</h2>
+    <div class="legenda">
+      <span><i style="background:#4c9be8"></i>robot</span>
+      <span><i style="background:#ff6b35"></i>traseul sculei</span>
+      <span><i style="background:#8a96a3"></i>obstacol</span>
+      <span><i style="background:#e5484d"></i>coliziune</span>
+    </div>
+    <footer>Date generate de <code>./build/export_viz</code> ·
+      <a href="https://github.com/marc22w/robot-kinematics-cpp">cod sursă pe GitHub</a></footer>
+  </aside>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const canvas = $("c"), ctx = canvas.getContext("2d");
+let date = null, sc = null, timp = 0, ruleaza = true, vitezaRedare = 1, ultimCadru = null;
+const cam = { yaw: -2.2, pitch: 0.42, dist: 1.55, tinta: [-0.2, -0.2, 0.28] };
+const CULOARE_LINK = ["#3d566e", "#4c9be8", "#5aa8f0", "#6cb4f2", "#7fc0f4", "#93cbf6"];
+
+// ---------- proiectie 3D (z in sus) ----------
+function baza() {
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  const ochi = [cam.tinta[0] + cam.dist * cp * cy, cam.tinta[1] + cam.dist * cp * sy, cam.tinta[2] + cam.dist * sp];
+  const f = norm(sub(cam.tinta, ochi));
+  const r = norm(cross(f, [0, 0, 1]));
+  const u = cross(r, f);
+  return { ochi, f, r, u };
+}
+function proiecteaza(p, B, W, H) {
+  const d = sub(p, B.ochi);
+  const z = dot(d, B.f);
+  const s = (Math.min(W, H) * 0.9) / Math.max(z, 0.05);
+  return { x: W / 2 + dot(d, B.r) * s, y: H / 2 - dot(d, B.u) * s, z, s };
+}
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+// ---------- esantionare dupa timp ----------
+function cauta(t) {   // indexul k cu t[k] <= t < t[k+1] si fractia dintre ele
+  const T = sc.t;
+  if (t <= T[0]) return [0, 0];
+  if (t >= T[T.length - 1]) return [T.length - 2, 1];
+  let lo = 0, hi = T.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= t) lo = m; else hi = m; }
+  return [lo, (t - T[lo]) / (T[hi] - T[lo])];
+}
+
+// ---------- desen ----------
+function deseneaza() {
+  const W = canvas.clientWidth, H = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (!sc) return;
+  const B = baza(), P = (p) => proiecteaza(p, B, W, H);
+
+  // masa: grila 1.6 x 1.6 m in jurul bazei
+  ctx.lineWidth = 1;
+  for (let i = -8; i <= 8; i++) {
+    const v = i * 0.1;
+    ctx.strokeStyle = i === 0 ? "rgba(143,163,181,0.35)" : "rgba(143,163,181,0.13)";
+    linie(P([v, -0.8, 0]), P([v, 0.8, 0]));
+    linie(P([-0.8, v, 0]), P([0.8, v, 0]));
+  }
+  // axele bazei
+  const o = P([0, 0, 0]);
+  [[0.15, 0, 0, "#e5484d", "x"], [0, 0.15, 0, "#2ca58d", "y"], [0, 0, 0.15, "#4c9be8", "z"]].forEach(([x, y, z, c, n]) => {
+    const e = P([x, y, z]); ctx.strokeStyle = c; ctx.lineWidth = 2; linie(o, e);
+    ctx.fillStyle = c; ctx.font = "12px ui-monospace, monospace"; ctx.fillText(n, e.x + 4, e.y - 4);
+  });
+
+  const [k, f] = cauta(timp);
+  const puncte = sc.puncte[k].map((p, i) => lerp(p, sc.puncte[k + 1][i], f));
+  const coliziune = (f < 0.5 ? sc.dist[k] : sc.dist[k + 1]) < 0;
+
+  // traseul sculei: tot (estompat) + parcurs (plin)
+  const tool = sc.puncte.map((pp) => P(pp[6]));
+  ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,107,53,0.25)"; polilinie(tool);
+  ctx.strokeStyle = "#ff6b35"; polilinie(tool.slice(0, k + 1).concat([P(puncte[6])]));
+
+  // corpuri de desenat, sortate dupa adancime (cele departate intai)
+  const corpuri = [];
+  sc.obstacole.forEach((ob) => corpuri.push({ a: ob.a, b: ob.b, r: ob.r, culoare: "#8a96a3", contur: "#5d6875" }));
+  for (let i = 0; i < 6; i++) {
+    corpuri.push({ a: puncte[i], b: puncte[i + 1], r: date.raze[i],
+      culoare: coliziune ? "#e5484d" : CULOARE_LINK[i], contur: coliziune ? "#8f1d21" : "#1f3347" });
+  }
+  corpuri.forEach((c) => { c.A = P(c.a); c.B = P(c.b); c.z = (c.A.z + c.B.z) / 2; });
+  corpuri.sort((m, n) => n.z - m.z);
+  ctx.lineCap = "round";
+  corpuri.forEach((c) => {
+    const w = 2 * c.r * (c.A.s + c.B.s) / 2;
+    ctx.strokeStyle = c.contur; ctx.lineWidth = w + 3; linie(c.A, c.B);
+    ctx.strokeStyle = c.culoare; ctx.lineWidth = w; linie(c.A, c.B);
+    ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = Math.max(1, w * 0.25);
+    linie({ x: c.A.x - w * 0.18, y: c.A.y - w * 0.18 }, { x: c.B.x - w * 0.18, y: c.B.y - w * 0.18 });
+  });
+  // articulatii
+  puncte.forEach((p) => { const q = P(p); ctx.fillStyle = "#0f1419";
+    ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(2, 0.012 * q.s), 0, 7); ctx.fill(); });
+  // flansa
+  const fl = P(puncte[6]); ctx.fillStyle = "#ff6b35";
+  ctx.beginPath(); ctx.arc(fl.x, fl.y, Math.max(3, 0.018 * fl.s), 0, 7); ctx.fill();
+
+  actualizeazaPanou(k, f, coliziune);
+}
+function linie(a, b) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+function polilinie(pts) { if (pts.length < 2) return; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke(); }
+
+// ---------- panou ----------
+function actualizeazaPanou(k, f, coliziune) {
+  const T = sc.t[sc.t.length - 1];
+  $("tCurent").textContent = timp.toFixed(2) + " s";
+  $("tTotal").textContent = T.toFixed(2) + " s";
+  if (document.activeElement !== $("slider")) $("slider").value = Math.round((timp / T) * 1000);
+  const v = sc.viteza[k] + (sc.viteza[k + 1] - sc.viteza[k]) * f;
+  $("vScula").textContent = v.toFixed(3) + " m/s";
+  const j = f < 0.5 ? k : k + 1;
+  $("dMin").textContent = (sc.dist[j] * 1000).toFixed(1) + " mm";
+  $("pereche").textContent = "cele mai apropiate: " + sc.pereche[j];
+  const st = $("stare"); st.textContent = coliziune ? "COLIZIUNE" : "LIBER";
+  st.className = "stare " + (coliziune ? "coliziune" : "liber");
+  const q = sc.q[k].map((a, i) => a + (sc.q[k + 1][i] - a) * f);
+  q.forEach((a, i) => {
+    $("bara" + i).style.left = (50 + (a / 360) * 50) + "%";
+    $("val" + i).textContent = a.toFixed(1) + "°";
+  });
+}
+function construiestePanou() {
+  $("axe").innerHTML = [0, 1, 2, 3, 4, 5].map((i) =>
+    `<div class="axa"><span>A${i + 1}</span><div class="bara"><i id="bara${i}"></i></div><em id="val${i}"></em></div>`).join("");
+  $("scenarii").innerHTML = date.scenarii.map((s, i) => `<button data-i="${i}">${s.nume}</button>`).join("");
+  $("scenarii").querySelectorAll("button").forEach((b) => b.onclick = () => alege(+b.dataset.i));
+}
+function alege(i) {
+  sc = date.scenarii[i]; timp = 0; ruleaza = true; $("play").textContent = "❚❚";
+  $("descriere").textContent = sc.descriere;
+  $("scenarii").querySelectorAll("button").forEach((b) => b.classList.toggle("activ", +b.dataset.i === i));
+}
+
+// ---------- animatie si interactiune ----------
+function cadru(acum) {
+  if (ultimCadru !== null && ruleaza && sc) {
+    timp += ((acum - ultimCadru) / 1000) * vitezaRedare;
+    const T = sc.t[sc.t.length - 1];
+    if (timp > T + 0.8) timp = 0;   // scurta pauza la final, apoi reia
+  }
+  ultimCadru = acum;
+  deseneaza();
+  requestAnimationFrame(cadru);
+}
+$("play").onclick = () => { ruleaza = !ruleaza; $("play").textContent = ruleaza ? "❚❚" : "▶"; };
+$("viteza").onchange = (e) => vitezaRedare = +e.target.value;
+$("slider").oninput = (e) => { if (!sc) return; timp = (e.target.value / 1000) * sc.t[sc.t.length - 1];
+  ruleaza = false; $("play").textContent = "▶"; };
+
+let trage = null;
+canvas.addEventListener("pointerdown", (e) => { trage = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", (e) => {
+  if (!trage) return;
+  cam.yaw -= (e.clientX - trage[0]) * 0.008;
+  cam.pitch = Math.min(1.45, Math.max(0.05, cam.pitch + (e.clientY - trage[1]) * 0.006));
+  trage = [e.clientX, e.clientY];
+});
+canvas.addEventListener("pointerup", () => trage = null);
+canvas.addEventListener("wheel", (e) => { e.preventDefault();
+  cam.dist = Math.min(5, Math.max(0.8, cam.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+
+fetch("scenarii.json")
+  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then((d) => { date = d; construiestePanou(); alege(0); requestAnimationFrame(cadru); })
+  .catch((e) => { console.error(e); document.querySelector(".scena").innerHTML =
+    '<div class="eroare">Nu am putut încărca <code>scenarii.json</code>. Pagina trebuie deschisă printr-un server ' +
+    '(de exemplu GitHub Pages sau <code>python3 -m http.server</code>), nu direct din fișier.</div>'; });
+</script>
+</body>
+</html>

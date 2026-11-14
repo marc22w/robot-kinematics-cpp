@@ -26,27 +26,27 @@ struct JointLimits {
 
 // Setari pentru cinematica inversa
 struct IKOptions {
-    int maxIter = 300;       // iteratii pe o incercare
-    double tol = 1e-8;       // eroare acceptata: m pentru pozitie, rad pentru orientare
-    double maxStep = 0.5;    // pasul maxim pe o articulatie intr-o iteratie, rad
-    int restarts = 20;       // reporniri din puncte aleatoare daca nu converge
-    unsigned seed = 1;       // pentru repornirile aleatoare (rezultat reproductibil)
+    int maxIter = 300;       
+    double tol = 1e-8;       
+    double maxStep = 0.5;    
+    int restarts = 20;       
+    unsigned seed = 1;       
 };
 
 struct IKResult {
     Joints q = Joints::Zero();
     bool converged = false;
-    int iterations = 0;      // total, peste toate incercarile
-    double posError = 0.0;   // m
-    double rotError = 0.0;   // rad
+    int iterations = 0;      
+    double posError = 0.0;   
+    double rotError = 0.0;   
 };
 
-// Cat de aproape e UR5 de fiecare tip de singularitate (0 = exact in singularitate)
+
 struct SingularitatiUR {
-    double incheietura;  // |sin A5|: 0 cand axele 4 si 6 sunt aliniate
+    double incheietura;  
     double cot;          // |sin A3|: 0 cand bratul e complet intins sau pliat
     double umar;         // m: distanta orizontala a incheieturii fata de axa 1
-    bool aproape(double prag = 0.02) const {   // 0.02 = ~1.1 grade, respectiv 20 mm
+    bool aproape(double prag = 0.02) const {   
         return incheietura < prag || cot < prag || umar < prag;
     }
 };

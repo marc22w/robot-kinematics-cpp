@@ -22,7 +22,7 @@ target_link_libraries(kinematics PUBLIC Eigen3::Eigen)
 target_compile_options(kinematics PRIVATE -Wall -Wextra -Wpedantic)
 
 # programe demonstrative
-foreach(exemplu demo singularitati benchmark coliziuni)
+foreach(exemplu demo singularitati benchmark coliziuni export_viz)
   set(sursa ${exemplu})
   if(exemplu STREQUAL "demo")
     set(sursa main)
