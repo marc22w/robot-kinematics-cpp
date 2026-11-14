@@ -3,6 +3,7 @@
 #include <string>
 
 #include "kinematics/robot.hpp"
+#include "kinematics/trajectory.hpp"
 
 namespace {
 
@@ -32,5 +33,22 @@ int main() {
     raport(robot, "Incheietura (A5 = 0)", grade(0, -90, 90, -90, 0, 0));
     raport(robot, "Cot, brat intins (A3 = 0)", grade(0, -45, 0, -45, -90, 0));
     raport(robot, "Umar", grade(0, -90, 13.96, 166.04, -90, 0));
+
+    // miscare LIN care trece prin singularitatea incheieturii
+    std::cout << "\nMISCARE LIN PRIN SINGULARITATEA INCHEIETURII (A5: -10 -> +10 grade)\n";
+    const kin::Joints q0 = grade(0, -90, 90, -90, -10, 0);
+    const Eigen::Isometry3d tinta = robot.forward(grade(0, -90, 90, -90, 10, 0));
+    for (const kin::SolverIK solver : {kin::SolverIK::Numeric, kin::SolverIK::AnaliticUR5}) {
+        kin::LinOptions opt;
+        opt.solver = solver;
+        const kin::CartesianResult r = kin::linearCartesian(robot, q0, tinta, 2.0, 0.01, opt);
+        std::cout << "  " << (solver == kin::SolverIK::Numeric ? "Numeric:  " : "Analitic: ");
+        if (r.ok) {
+            std::cout << "reusit\n";
+        } else {
+            std::cout << "oprit la t = " << std::setprecision(2) << r.esuatLa * 0.01 << " s, "
+                      << r.motiv << "\n";
+        }
+    }
     return 0;
 }

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "kinematics/robot.hpp"
+#include "kinematics/trajectory.hpp"
 #include "kinematics/ur_analytic.hpp"
 
 int main() {
@@ -51,6 +52,23 @@ int main() {
         convergenteZ += robot.inverse(tinte[k], kin::Joints::Zero()).converged;
     });
 
+    // miscarea LIN din demo (301 puncte), numeric vs analitic
+    kin::Joints acasa;
+    acasa << 0, -kPi / 2, kPi / 2, -kPi / 2, -kPi / 2, 0;
+    const Eigen::Isometry3d start = robot.forward(acasa);
+    Eigen::Isometry3d capat = start;
+    capat.translation() << -0.300, -0.400, 0.250;
+    capat.linear() = Eigen::AngleAxisd(kPi / 6, Eigen::Vector3d::UnitZ()) * start.linear();
+    auto masoaraLin = [&](kin::SolverIK solver) {
+        kin::LinOptions o;
+        o.solver = solver;
+        const auto t0 = Ceas::now();
+        for (int r = 0; r < 20; ++r) suma += kin::linearCartesian(robot, acasa, capat, 3.0, 0.01, o).ok;
+        return std::chrono::duration<double, std::milli>(Ceas::now() - t0).count() / 20;
+    };
+    const double linNumeric = masoaraLin(kin::SolverIK::Numeric);
+    const double linAnalitic = masoaraLin(kin::SolverIK::AnaliticUR5);
+
     std::cout << std::fixed << std::setprecision(1)
               << "BENCHMARK UR5 (" << N << " tinte aleatoare)\n\n"
               << "  Cinematica directa:            " << std::setw(8) << tDirecta * 1000.0
@@ -62,6 +80,9 @@ int main() {
               << static_cast<double>(iteratiiA) / N << " iteratii)\n"
               << "  IK numeric, pornire din zero:  " << std::setw(8) << tZero << " us/tinta"
               << "   (" << 100.0 * convergenteZ / N << "% reusite)\n"
+              << std::setprecision(2)
+              << "  LIN 301 puncte, numeric:       " << std::setw(8) << linNumeric << " ms/miscare\n"
+              << "  LIN 301 puncte, analitic:      " << std::setw(8) << linAnalitic << " ms/miscare\n"
               << "\n  (control: " << std::setprecision(3) << suma << ")\n";
     return 0;
 }

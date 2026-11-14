@@ -135,3 +135,46 @@ TEST(CSV, UnRandPentruFiecarePunct) {
     while (std::getline(in, rand)) ++randuri;
     EXPECT_EQ(randuri, traj.size());
 }
+
+TEST(LinAnalitic, AceeasiMiscareCaVariantaNumerica) {
+    const Robot r = Robot::ur5();
+    LinOptions an;
+    an.solver = SolverIK::AnaliticUR5;
+    const CartesianResult num = linearCartesian(r, kStart, tintaLiniara(r), 3.0, 0.01);
+    const CartesianResult ana = linearCartesian(r, kStart, tintaLiniara(r), 3.0, 0.01, an);
+    ASSERT_TRUE(num.ok);
+    ASSERT_TRUE(ana.ok);
+    ASSERT_EQ(num.traj.size(), ana.traj.size());
+    for (size_t k = 0; k < num.traj.size(); ++k) {
+        EXPECT_LT((num.traj[k].q - ana.traj[k].q).cwiseAbs().maxCoeff(), 1e-6);
+    }
+}
+
+TEST(LinAnalitic, SingularitateaIncheieturiiOpresteMiscarea) {
+    // A5 trece de la -10 la +10 grade: LIN-ul trece prin singularitatea incheieturii
+    const Robot r = Robot::ur5();
+    const Joints q0 = dinGrade(0, -90, 90, -90, -10, 0);
+    const Eigen::Isometry3d tinta = r.forward(dinGrade(0, -90, 90, -90, 10, 0));
+    for (const SolverIK solver : {SolverIK::Numeric, SolverIK::AnaliticUR5}) {
+        LinOptions opt;
+        opt.solver = solver;
+        const CartesianResult res = linearCartesian(r, q0, tinta, 2.0, 0.01, opt);
+        EXPECT_FALSE(res.ok);
+        EXPECT_GT(res.esuatLa, 80);
+        EXPECT_LT(res.esuatLa, 120);
+        EXPECT_NE(res.motiv.find("singularitate"), std::string::npos);
+        ASSERT_FALSE(res.traj.empty());
+        EXPECT_LT(std::abs(res.traj.back().q[4]), 2.0 * kPi / 180.0);   // oprit langa A5 = 0
+    }
+}
+
+TEST(LinAnalitic, TintaInaccesibilaAreMotiv) {
+    const Robot r = Robot::ur5();
+    Eigen::Isometry3d tinta = r.forward(kStart);
+    tinta.translation() << 2.0, 0.0, 0.5;
+    LinOptions an;
+    an.solver = SolverIK::AnaliticUR5;
+    const CartesianResult res = linearCartesian(r, kStart, tinta, 3.0, 0.01, an);
+    EXPECT_FALSE(res.ok);
+    EXPECT_EQ(res.motiv, "tinta inaccesibila");
+}

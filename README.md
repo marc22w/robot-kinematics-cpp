@@ -20,6 +20,8 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 | Numerical IK optimization | 4.8 → 2.9 µs per solve from a nearby start (−40%), same iterations, by reusing link frames between iterations and precomputing DH constants |
 | Minimum-time PTP move (120° on axis 1) | 1.74 s, at the 4 rad/s² acceleration limit |
 | Collision check on the LIN move | obstacle hit detected at t = 1.45 s (wrist 2 vs. pole) |
+| LIN move, 301 points | 0.29 ms with analytical IK, 0.43 ms numerical |
+| LIN through the wrist singularity | refused at t = 0.99 s (axis 4 would jump 20.3° in 10 ms) instead of an impossible motion |
 | PTP vs LIN, same end pose | PTP tool path deviates up to 41.5 mm from the straight line |
 
 ## Features
@@ -38,10 +40,11 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
   trajectory with the two closest bodies reported.
 - **PTP motion**: quintic (minimum-jerk) profile, zero velocity and acceleration at both ends.
 - **Minimum duration** for a PTP move from per-joint velocity and acceleration limits.
-- **LIN motion**: straight-line tool path with slerp-interpolated orientation and inverse
-  kinematics at every step, continuous joint motion, stops at the first unreachable point.
+- **LIN motion**: straight-line tool path with slerp-interpolated orientation, solved at every
+  step with the numerical or the analytical (UR5) IK; a continuity check stops the move at
+  unreachable points and at singularities, reporting the reason.
 - **CSV export** of joint trajectories and tool paths, plotted with a small Python script.
-- **42 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
+- **45 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
 
 ![PTP motion profile](docs/ptp_profil.png)
 

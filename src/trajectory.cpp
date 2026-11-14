@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
+
+#include "kinematics/ur_analytic.hpp"
 
 namespace kin {
 
@@ -53,14 +57,15 @@ double durataMinima(const Joints& q0, const Joints& q1, const Joints& vmax, cons
 }
 
 CartesianResult linearCartesian(const Robot& robot, const Joints& qStart,
-                                const Eigen::Isometry3d& tinta, double durata, double dt) {
+                                const Eigen::Isometry3d& tinta, double durata, double dt,
+                                const LinOptions& opt) {
     const int n = numarPasi(durata, dt);
     const Eigen::Isometry3d start = robot.forward(qStart);
     const Eigen::Quaterniond r0(start.rotation());
     const Eigen::Quaterniond r1(tinta.rotation());
 
-    IKOptions opt;
-    opt.restarts = 0;   // fara reporniri: robotul nu are voie sa sara in alta configuratie
+    IKOptions ikOpt;
+    ikOpt.restarts = 0;   // fara reporniri: robotul nu are voie sa sara in alta configuratie
 
     CartesianResult res;
     res.traj.reserve(n + 1);
@@ -72,15 +77,40 @@ CartesianResult linearCartesian(const Robot& robot, const Joints& qStart,
         T.linear() = r0.slerp(s, r1).toRotationMatrix();
         T.translation() = start.translation() + s * (tinta.translation() - start.translation());
 
-        const IKResult ik = robot.inverse(T, q, opt);
-        if (!ik.converged) {
+        Joints q_nou;
+        if (opt.solver == SolverIK::AnaliticUR5) {
+            const auto sol = celMaiApropiat(inverseUR5(T), q, robot.limits());
+            if (!sol) {
+                res.esuatLa = k;
+                res.motiv = "tinta inaccesibila";
+                return res;
+            }
+            q_nou = *sol;
+        } else {
+            const IKResult ik = robot.inverse(T, q, ikOpt);
+            if (!ik.converged) {
+                res.esuatLa = k;
+                res.motiv = "tinta inaccesibila";
+                return res;
+            }
+            // varianta (+-360 grade) cea mai apropiata de punctul anterior
+            Joints dq = ik.q - q;
+            for (int i = 0; i < kAxe; ++i) dq[i] = std::atan2(std::sin(dq[i]), std::cos(dq[i]));
+            q_nou = q + dq;
+        }
+
+        // continuitate: un salt mare intre puncte vecine inseamna trecerea printr-o singularitate
+        int axa = 0;
+        const double salt = (q_nou - q).cwiseAbs().maxCoeff(&axa);
+        if (salt > opt.saltMaxim) {
+            std::ostringstream m;
+            m << std::fixed << std::setprecision(1) << "salt de " << salt * 180.0 / 3.14159265358979
+              << " grade pe axa " << axa + 1 << " (singularitate)";
             res.esuatLa = k;
+            res.motiv = m.str();
             return res;
         }
-        // pastram continuitatea: fara salturi de 360 de grade intre puncte vecine
-        Joints dq = ik.q - q;
-        for (int i = 0; i < kAxe; ++i) dq[i] = std::atan2(std::sin(dq[i]), std::cos(dq[i]));
-        q += dq;
+        q = q_nou;
 
         TrajPoint p;
         p.t = u * durata;
