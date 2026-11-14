@@ -25,32 +25,43 @@ int main() {
         tinte[k] = robot.forward(reale[k]);
     }
 
-    auto masoara = [&](auto&& functie) {
+    auto masoara = [&](int repetari, auto&& functie) {
         const auto t0 = Ceas::now();
-        for (int k = 0; k < N; ++k) functie(k);
-        return std::chrono::duration<double, std::micro>(Ceas::now() - t0).count() / N;
+        for (int r = 0; r < repetari; ++r)
+            for (int k = 0; k < N; ++k) functie(k);
+        return std::chrono::duration<double, std::micro>(Ceas::now() - t0).count() /
+               (static_cast<double>(N) * repetari);
     };
 
-    size_t solutii = 0;
-    const double tAnalitic = masoara([&](int k) { solutii += kin::inverseUR5(tinte[k]).size(); });
+    double suma = 0.0;   // folosim rezultatul, ca compilatorul sa nu elimine calculul
+    const double tDirecta = masoara(50, [&](int k) { suma += robot.forward(reale[k])(0, 3); });
 
+    size_t solutii = 0;
+    const double tAnalitic =
+        masoara(5, [&](int k) { solutii += kin::inverseUR5(tinte[k]).size(); });
+
+    long iteratiiA = 0;
     int convergenteA = 0, convergenteZ = 0;
-    const double tApropiat = masoara([&](int k) {
-        convergenteA += robot.inverse(tinte[k], apropiate[k]).converged;
+    const double tApropiat = masoara(1, [&](int k) {
+        const kin::IKResult r = robot.inverse(tinte[k], apropiate[k]);
+        convergenteA += r.converged;
+        iteratiiA += r.iterations;
     });
-    const double tZero = masoara([&](int k) {
+    const double tZero = masoara(1, [&](int k) {
         convergenteZ += robot.inverse(tinte[k], kin::Joints::Zero()).converged;
     });
 
     std::cout << std::fixed << std::setprecision(1)
-              << "BENCHMARK CINEMATICA INVERSA UR5 (" << N << " tinte aleatoare)\n\n"
-              << "  Analitic, toate solutiile:     " << std::setw(8) << tAnalitic << " us/tinta"
-              << "   (in medie " << static_cast<double>(solutii) / N << " solutii)\n"
-              << "  Numeric, pornire apropiata:    " << std::setw(8) << tApropiat << " us/tinta"
-              << "   (" << 100.0 * convergenteA / N << "% reusite)\n"
-              << "  Numeric, pornire din zero:     " << std::setw(8) << tZero << " us/tinta"
-              << "   (" << 100.0 * convergenteZ / N << "% reusite)\n\n"
-              << "  Analiticul e de " << tApropiat / tAnalitic << "x mai rapid decat numericul cu"
-              << " pornire apropiata si de " << tZero / tAnalitic << "x fata de pornirea din zero.\n";
+              << "BENCHMARK UR5 (" << N << " tinte aleatoare)\n\n"
+              << "  Cinematica directa:            " << std::setw(8) << tDirecta * 1000.0
+              << " ns/calcul\n"
+              << "  IK analitic, toate solutiile:  " << std::setw(8) << tAnalitic << " us/tinta"
+              << "   (in medie " << static_cast<double>(solutii) / (N * 5) << " solutii)\n"
+              << "  IK numeric, pornire apropiata: " << std::setw(8) << tApropiat << " us/tinta"
+              << "   (" << 100.0 * convergenteA / N << "% reusite, in medie "
+              << static_cast<double>(iteratiiA) / N << " iteratii)\n"
+              << "  IK numeric, pornire din zero:  " << std::setw(8) << tZero << " us/tinta"
+              << "   (" << 100.0 * convergenteZ / N << "% reusite)\n"
+              << "\n  (control: " << std::setprecision(3) << suma << ")\n";
     return 0;
 }

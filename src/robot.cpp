@@ -10,6 +10,7 @@ namespace kin {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
+using Sisteme = std::array<Eigen::Isometry3d, kAxe + 1>;
 
 // Un pas de tip damped least squares: dq = J^T (J J^T + lambda^2 I)^-1 e
 Joints pasDLS(const Jacobian& J, const Vector6& e, double lambda) {
@@ -18,17 +19,32 @@ Joints pasDLS(const Jacobian& J, const Vector6& e, double lambda) {
     return J.transpose() * A.ldlt().solve(e);
 }
 
+// Jacobianul geometric, din sistemele de coordonate deja calculate
+Jacobian jacobianDinSisteme(const Sisteme& f) {
+    const Eigen::Vector3d flansa = f[kAxe].translation();
+    Jacobian J;
+    for (int i = 0; i < kAxe; ++i) {
+        const Eigen::Vector3d z = f[i].linear().col(2);   // axa articulatiei i
+        const Eigen::Vector3d o = f[i].translation();      // un punct pe axa
+        J.col(i) << z.cross(flansa - o), z;
+    }
+    return J;
+}
+
 Joints inLimite(const Joints& q, const JointLimits& lim) {
     return q.cwiseMax(lim.min).cwiseMin(lim.max);
 }
 
-// O singura incercare, pornind din q; articulatiile raman mereu in limite
+// O singura incercare, pornind din q; articulatiile raman mereu in limite.
+// Sistemele de coordonate ale configuratiei curente sunt pastrate intre iteratii:
+// cele calculate pentru pasul acceptat servesc si la Jacobianul iteratiei urmatoare.
 IKResult incercare(const Robot& robot, const Eigen::Isometry3d& tinta, Joints q,
                    const IKOptions& opt) {
     const JointLimits& lim = robot.limits();
     q = inLimite(q, lim);
     double lambda = 0.01;
-    Vector6 e = poseError(tinta, robot.forward(q));
+    Sisteme f = robot.frames(q);
+    Vector6 e = poseError(tinta, f[kAxe]);
     IKResult res;
     int k = 0;
     for (; k < opt.maxIter; ++k) {
@@ -36,15 +52,17 @@ IKResult incercare(const Robot& robot, const Eigen::Isometry3d& tinta, Joints q,
             res.converged = true;
             break;
         }
-        Joints dq = pasDLS(robot.jacobian(q), e, lambda);
+        Joints dq = pasDLS(jacobianDinSisteme(f), e, lambda);
         const double cel_mai_mare = dq.cwiseAbs().maxCoeff();
         if (cel_mai_mare > opt.maxStep) dq *= opt.maxStep / cel_mai_mare;
 
         const Joints q_nou = inLimite(q + dq, lim);
-        const Vector6 e_nou = poseError(tinta, robot.forward(q_nou));
+        Sisteme f_nou = robot.frames(q_nou);
+        const Vector6 e_nou = poseError(tinta, f_nou[kAxe]);
         if (e_nou.norm() < e.norm()) {   // pas bun: il pastram, amortizam mai putin
             q = q_nou;
             e = e_nou;
+            f = f_nou;
             lambda = std::max(lambda * 0.5, 1e-6);
         } else {                         // pas prost: il respingem, amortizam mai mult
             lambda = std::min(lambda * 4.0, 1.0);
@@ -88,7 +106,12 @@ SingularitatiUR singularitatiUR5(const Joints& q) {
     return s;
 }
 
-Robot::Robot(std::array<DH, kAxe> dh) : dh_(dh) {}
+Robot::Robot(std::array<DH, kAxe> dh) : dh_(dh) {
+    for (int i = 0; i < kAxe; ++i) {
+        cosAlpha_[i] = std::cos(dh_[i].alpha);
+        sinAlpha_[i] = std::sin(dh_[i].alpha);
+    }
+}
 
 Robot Robot::ur5() {
     return Robot(std::array<DH, kAxe>{{
@@ -101,6 +124,18 @@ Robot Robot::ur5() {
     }});
 }
 
+Eigen::Isometry3d Robot::articulatie(int i, double theta) const {
+    const DH& p = dh_[i];
+    const double ct = std::cos(theta), st = std::sin(theta);
+    const double ca = cosAlpha_[i], sa = sinAlpha_[i];
+    Eigen::Isometry3d T;
+    T.matrix() << ct, -st * ca,  st * sa, p.a * ct,
+                  st,  ct * ca, -ct * sa, p.a * st,
+                 0.0,       sa,       ca,      p.d,
+                 0.0,      0.0,      0.0,      1.0;
+    return T;
+}
+
 bool Robot::inLimits(const Joints& q, double tol) const {
     return (q.array() >= limite_.min.array() - tol).all() &&
            (q.array() <= limite_.max.array() + tol).all();
@@ -109,30 +144,22 @@ bool Robot::inLimits(const Joints& q, double tol) const {
 Eigen::Isometry3d Robot::forward(const Joints& q) const {
     Eigen::Isometry3d T = Eigen::Isometry3d::Identity();
     for (int i = 0; i < kAxe; ++i) {
-        T = T * dhTransform(dh_[i], q[i] + dh_[i].offset);
+        T = T * articulatie(i, q[i] + dh_[i].offset);
     }
     return T;
 }
 
 std::array<Eigen::Isometry3d, kAxe + 1> Robot::frames(const Joints& q) const {
-    std::array<Eigen::Isometry3d, kAxe + 1> f;
+    Sisteme f;
     f[0] = Eigen::Isometry3d::Identity();
     for (int i = 0; i < kAxe; ++i) {
-        f[i + 1] = f[i] * dhTransform(dh_[i], q[i] + dh_[i].offset);
+        f[i + 1] = f[i] * articulatie(i, q[i] + dh_[i].offset);
     }
     return f;
 }
 
 Jacobian Robot::jacobian(const Joints& q) const {
-    const auto f = frames(q);
-    const Eigen::Vector3d flansa = f[kAxe].translation();
-    Jacobian J;
-    for (int i = 0; i < kAxe; ++i) {
-        const Eigen::Vector3d z = f[i].rotation().col(2);   // axa articulatiei i
-        const Eigen::Vector3d o = f[i].translation();        // un punct pe axa
-        J.col(i) << z.cross(flansa - o), z;
-    }
-    return J;
+    return jacobianDinSisteme(frames(q));
 }
 
 double Robot::manipulability(const Joints& q) const {

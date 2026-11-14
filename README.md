@@ -14,8 +14,10 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 | Inverse kinematics precision | position error below 1e-7 mm |
 | Inverse kinematics speed | converges in ~4 iterations from a nearby start |
 | Robustness | 100% of random reachable poses solved (with random restarts) |
-| Analytical IK (UR5) | all solutions (up to 8, avg. 7.1) in 3.9 µs |
-| Analytical vs numerical IK from a cold start | 10.9× faster (3.9 µs vs 42.3 µs), all solutions instead of one |
+| Forward kinematics | 132 ns per pose |
+| Analytical IK (UR5) | all solutions (up to 8, avg. 7.1) in 3.3 µs |
+| Analytical vs numerical IK from a cold start | 8.8× faster (3.3 µs vs 29.1 µs), all solutions instead of one |
+| Numerical IK optimization | 4.8 → 2.9 µs per solve from a nearby start (−40%), same iterations, by reusing link frames between iterations and precomputing DH constants |
 | Minimum-time PTP move (120° on axis 1) | 1.74 s, at the 4 rad/s² acceleration limit |
 | Collision check on the LIN move | obstacle hit detected at t = 1.45 s (wrist 2 vs. pole) |
 | PTP vs LIN, same end pose | PTP tool path deviates up to 41.5 mm from the straight line |
@@ -39,7 +41,7 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 - **LIN motion**: straight-line tool path with slerp-interpolated orientation and inverse
   kinematics at every step, continuous joint motion, stops at the first unreachable point.
 - **CSV export** of joint trajectories and tool paths, plotted with a small Python script.
-- **41 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
+- **42 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
 
 ![PTP motion profile](docs/ptp_profil.png)
 

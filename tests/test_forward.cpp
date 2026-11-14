@@ -107,3 +107,19 @@ TEST(ForwardUR5, SistemeleSeTerminaInFlansa) {
     EXPECT_TRUE(f.front().matrix().isApprox(Eigen::Matrix4d::Identity()));
     EXPECT_TRUE(f.back().matrix().isApprox(r.forward(q).matrix(), 1e-12));
 }
+
+TEST(Optimizare, CinematicaRapidaEgalaCuProdusulDH) {
+    // referinta: produsul transformarilor DH, calculate fara valori precalculate
+    const std::array<kin::DH, kin::kAxe> dh = {{
+        {0.0, kPi / 2, 0.089159}, {-0.425, 0.0, 0.0}, {-0.39225, 0.0, 0.0},
+        {0.0, kPi / 2, 0.10915}, {0.0, -kPi / 2, 0.09465}, {0.0, 0.0, 0.0823},
+    }};
+    std::mt19937 gen(99);
+    const Robot r = Robot::ur5();
+    for (int k = 0; k < 200; ++k) {
+        const Joints q = aleator(gen);
+        Eigen::Isometry3d ref = Eigen::Isometry3d::Identity();
+        for (int i = 0; i < kin::kAxe; ++i) ref = ref * kin::dhTransform(dh[i], q[i]);
+        EXPECT_LT((r.forward(q).matrix() - ref.matrix()).cwiseAbs().maxCoeff(), 1e-14);
+    }
+}

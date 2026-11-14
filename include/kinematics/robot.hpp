@@ -89,7 +89,12 @@ public:
                      const IKOptions& opt = IKOptions{}) const;
 
 private:
+    // transformarea articulatiei i, cu cos/sin(alpha) precalculate in constructor
+    Eigen::Isometry3d articulatie(int i, double theta) const;
+
     std::array<DH, kAxe> dh_;
+    std::array<double, kAxe> cosAlpha_{};
+    std::array<double, kAxe> sinAlpha_{};
     JointLimits limite_;
 };
 
