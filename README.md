@@ -22,6 +22,7 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 | Collision check on the LIN move | obstacle hit detected at t = 1.45 s (wrist 2 vs. pole) |
 | LIN move, 301 points | 0.29 ms with analytical IK, 0.43 ms numerical |
 | LIN through the wrist singularity | refused at t = 0.99 s (axis 4 would jump 20.3° in 10 ms) instead of an impossible motion |
+| Velocity-limited LIN (0.5 m/s, 700 mm past the base axis) | without limiting, axis 6 would reach 285.6°/s (limit 180°/s); the tool slows to 0.315 m/s near the base, all joints stay ≤ 180°/s, duration 1.733 → 1.845 s |
 | PTP vs LIN, same end pose | PTP tool path deviates up to 41.5 mm from the straight line |
 
 ## Features
@@ -43,8 +44,11 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 - **LIN motion**: straight-line tool path with slerp-interpolated orientation, solved at every
   step with the numerical or the analytical (UR5) IK; a continuity check stops the move at
   unreachable points and at singularities, reporting the reason.
+- **Velocity-limited LIN**: trapezoidal tool-speed profile with look-ahead (forward/backward
+  pass, as on CNC controllers); the tool slows down automatically wherever a joint would
+  exceed its velocity limit, e.g. near singularities.
 - **CSV export** of joint trajectories and tool paths, plotted with a small Python script.
-- **45 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
+- **48 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
 
 ![PTP motion profile](docs/ptp_profil.png)
 

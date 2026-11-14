@@ -178,3 +178,65 @@ TEST(LinAnalitic, TintaInaccesibilaAreMotiv) {
     EXPECT_FALSE(res.ok);
     EXPECT_EQ(res.motiv, "tinta inaccesibila");
 }
+
+namespace {
+
+// LIN de 700 mm pe langa axa 1 (la ~130 mm de ea), scula in jos
+const Joints kLangaBaza = dinGrade(3.38, -107.07, 116.33, -99.26, -90, 3.38);
+
+Eigen::Isometry3d tintaLangaBaza(const Robot& r) {
+    Eigen::Isometry3d t = r.forward(kLangaBaza);
+    t.translation().x() += 0.70;
+    return t;
+}
+
+}  // namespace
+
+TEST(LinViteza, ProfilTrapezoidalCandNuSuntLimite) {
+    const Robot r = Robot::ur5();
+    LinViteza v;
+    v.vScula = 0.5;
+    v.aScula = 1.5;
+    v.vmax = Joints::Constant(1e9);   // practic fara limite pe articulatii
+    const CartesianResult res = linearCartesianViteza(r, kLangaBaza, tintaLangaBaza(r), v);
+    ASSERT_TRUE(res.ok);
+    EXPECT_EQ(res.puncteLimitate, 0);
+    // trapez: L / v + v / a
+    EXPECT_NEAR(res.traj.back().t, 0.70 / 0.5 + 0.5 / 1.5, 2e-3);
+}
+
+TEST(LinViteza, ArticulatiileNuDepasescLimita) {
+    const Robot r = Robot::ur5();
+    LinViteza v;
+    v.vScula = 0.5;
+    v.aScula = 1.5;
+    const CartesianResult res = linearCartesianViteza(r, kLangaBaza, tintaLangaBaza(r), v);
+    ASSERT_TRUE(res.ok);
+    EXPECT_GT(res.puncteLimitate, 0);
+    EXPECT_LT(res.vitezaMinima, 0.8 * v.vScula);   // scula chiar a fost incetinita
+
+    double raportMaxim = 0.0;
+    for (const TrajPoint& p : res.traj) {
+        raportMaxim = std::max(raportMaxim, (p.qd.cwiseAbs().array() / v.vmax.array()).maxCoeff());
+    }
+    EXPECT_LE(raportMaxim, 1.0 + 1e-9);
+    EXPECT_GE(raportMaxim, 0.999);   // limita e atinsa: nu incetinim mai mult decat trebuie
+
+    // scula ramane pe dreapta si nu depaseste viteza nominala
+    const double y0 = r.forward(kLangaBaza).translation().y();
+    for (size_t k = 1; k < res.traj.size(); ++k) {
+        const Eigen::Vector3d a = r.forward(res.traj[k - 1].q).translation();
+        const Eigen::Vector3d b = r.forward(res.traj[k].q).translation();
+        EXPECT_NEAR(b.y(), y0, 1e-6);
+        EXPECT_LE((b - a).norm() / (res.traj[k].t - res.traj[k - 1].t), v.vScula * (1 + 1e-4));
+    }
+}
+
+TEST(LinViteza, NuIncetinesteCandNuEsteNevoie) {
+    const Robot r = Robot::ur5();
+    LinViteza v;   // 0.25 m/s, 180 grade/s
+    const CartesianResult res = linearCartesianViteza(r, kStart, tintaLiniara(r), v);
+    ASSERT_TRUE(res.ok);
+    EXPECT_EQ(res.puncteLimitate, 0);
+    EXPECT_DOUBLE_EQ(res.vitezaMinima, v.vScula);
+}

@@ -44,10 +44,27 @@ struct CartesianResult {
     bool ok = false;
     int esuatLa = -1;     // indexul primului punct care nu poate fi atins continuu
     std::string motiv;    // de ce s-a oprit miscarea
+    double vitezaMinima = 0.0;  // m/s: cea mai mica viteza impusa sculei de limitele articulatiilor
+    int puncteLimitate = 0;     // in cate puncte a trebuit incetinita scula
 };
 CartesianResult linearCartesian(const Robot& robot, const Joints& qStart,
                                 const Eigen::Isometry3d& tinta, double durata, double dt,
                                 const LinOptions& opt = LinOptions{});
+
+// Parametrii unei miscari LIN cu viteza controlata
+struct LinViteza {
+    double vScula = 0.25;      // m/s: viteza nominala a sculei
+    double aScula = 1.0;       // m/s^2: acceleratia maxima a sculei pe traseu
+    Joints vmax = Joints::Constant(3.14159265358979323846);   // rad/s, pe fiecare articulatie
+    double pas = 0.001;        // m: distanta dintre doua puncte ale traseului
+};
+
+// Miscare LIN cu profil de viteza trapezoidal: scula merge cu vScula, iar acolo unde o
+// articulatie ar depasi vmax (de ex. langa o singularitate) scula este incetinita automat.
+// Durata rezulta din profil.
+CartesianResult linearCartesianViteza(const Robot& robot, const Joints& qStart,
+                                      const Eigen::Isometry3d& tinta, const LinViteza& v,
+                                      const LinOptions& opt = LinOptions{});
 
 // Salveaza traiectoria in CSV: t, q1..q6, qd1..qd6, qdd1..qdd6
 void scrieCSV(const std::string& fisier, const Trajectory& traj);
