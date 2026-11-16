@@ -25,6 +25,7 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 | LIN move, 301 points | 0.29 ms with analytical IK, 0.43 ms numerical |
 | LIN through the wrist singularity | refused at t = 0.99 s (axis 4 would jump 20.3° in 10 ms) instead of an impossible motion |
 | Velocity-limited LIN (0.5 m/s, 700 mm past the base axis) | without limiting, axis 6 would reach 285.6°/s (limit 180°/s); the tool slows to 0.315 m/s near the base, all joints stay ≤ 180°/s, duration 1.733 → 1.845 s |
+| Obstacle avoidance (RRT-Connect) | direct PTP hits the pole; planned path clears it, every point ≥ 10 mm from obstacles |
 | PTP vs LIN, same end pose | PTP tool path deviates up to 41.5 mm from the straight line |
 
 ## Features
@@ -41,6 +42,10 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 - **Collision checking**: robot links modelled as capsules; self-collision between
   non-adjacent links, planes (table, walls) and capsule obstacles; first collision along a
   trajectory with the two closest bodies reported.
+- **Motion planning (RRT-Connect)**: collision-free joint-space paths around obstacles with a
+  10 mm safety margin, path shortcutting, and conversion to a minimum-time trajectory.
+- **3D web viewer** (no dependencies, own canvas renderer): animated robot, tool path,
+  planner waypoints, live tool-speed chart and collision status; data exported from C++ to JSON.
 - **PTP motion**: quintic (minimum-jerk) profile, zero velocity and acceleration at both ends.
 - **Minimum duration** for a PTP move from per-joint velocity and acceleration limits.
 - **LIN motion**: straight-line tool path with slerp-interpolated orientation, solved at every
@@ -52,7 +57,7 @@ demonstrated on the Universal Robots UR5 (official Denavit–Hartenberg paramete
 - **3D web viewer** (no dependencies, own canvas renderer): animated robot, tool path,
   obstacles and live collision status; data exported from the C++ library to JSON.
 - **CSV export** of joint trajectories and tool paths, plotted with a small Python script.
-- **48 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
+- **54 unit tests** (GoogleTest), run on every push with **GitHub Actions**.
 
 ![PTP motion profile](docs/ptp_profil.png)
 
@@ -69,6 +74,8 @@ cmake -S . -B build && cmake --build build
 ./build/singularitati                          # singularity analysis
 ./build/benchmark                              # analytical vs numerical IK
 ./build/coliziuni                              # collision checks
+./build/planificare                            # obstacle avoidance with RRT-Connect
+./build/export_viz                             # data for the 3D web viewer (docs/viz)
 ctest --test-dir build --output-on-failure     # runs the test suite
 ```
 
